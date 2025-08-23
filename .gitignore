@@ -1,0 +1,2 @@
+.env
+internal/config/env.go
