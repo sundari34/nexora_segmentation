@@ -1,5 +1,7 @@
 package models
 
+import "github.com/nexora/nexora_segmentation/internal/utils"
+
 // Payload matches what your UI sends
 type SegmentPayload struct {
 	SegmentID      string      `json:"segment_id,omitempty"` // optional: pass via payload or query param
@@ -16,6 +18,7 @@ type RuleGroup struct {
 
 type Filter struct {
 	EventType string    `json:"event_type"` // e.g., "System Events"
+	EventName string    `json:"event_name"` // e.g., "App opened"
 	EventID   int       `json:"event_id"`   // UI event id (optional mapping)
 	Condition string    `json:"condition"`  // e.g., "has_performed"
 	Time      TimeRule  `json:"time"`
@@ -23,16 +26,30 @@ type Filter struct {
 	Query     *string   `json:"query"` // RQB JSON string or null
 }
 
+// type TimeRule struct {
+// 	Operator string  `json:"operator"`
+// 	Start    *string `json:"start,omitempty"`
+// 	End      *string `json:"end,omitempty"`
+// 	Value    *string `json:"value,omitempty"`
+// 	DayValue *int    `json:"day_value,omitempty"`
+// }
+
+// type CountRule struct {
+// 	Operator string `json:"operator"` // equal_to, greater_than, less_than, at_least, at_most
+// 	Value    string `json:"value"`    // integer as string
+// }
+
 type TimeRule struct {
-	Operator string  `json:"operator"` // e.g., "last_n_days", "before", "after", "between"
-	Start    *string `json:"start"`    // ISO "YYYY-MM-DD" when relevant
-	End      *string `json:"end"`      // ISO "YYYY-MM-DD" when relevant
-	Value    *string `json:"value"`    // e.g., "7" for last_n_days
+	Operator string                `json:"operator"`
+	Start    *utils.FlexibleString `json:"start,omitempty"`
+	End      *utils.FlexibleString `json:"end,omitempty"`
+	Value    *utils.FlexibleString `json:"value,omitempty"`
+	DayValue *int                  `json:"day_value,omitempty"`
 }
 
 type CountRule struct {
-	Operator string `json:"operator"` // equal_to, greater_than, less_than, at_least, at_most
-	Value    string `json:"value"`    // integer as string
+	Operator string               `json:"operator"`
+	Value    utils.FlexibleString `json:"value"`
 }
 
 // Response member

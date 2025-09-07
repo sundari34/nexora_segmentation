@@ -51,34 +51,49 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 		return nil, err
 	}
 
+	// map operator
 	op, err := mapCountOperator(f.Count.Operator)
 	if err != nil {
 		return nil, err
 	}
-	countVal, err := parseIntStrict(f.Count.Value)
+
+	// convert FlexibleString -> int
+	countVal, err := f.Count.Value.ToInt()
 	if err != nil {
 		return nil, fmt.Errorf("invalid count.value: %v", err)
 	}
 
 	eventCategory := mapEventType(f.EventType)
+	eventName := f.EventName
+
+	// Build WHERE clause for time operator
+	timeClause := "event_date >= toDate(?) AND event_date <= toDate(?)"
+	timeParams := []any{start, end}
+	if f.Time.Operator == "before" {
+		timeClause = "event_date < toDate(?)"
+		timeParams = []any{f.Time.DayValue}
+	}
 
 	var b strings.Builder
 	b.WriteString(`
 		SELECT nexora_id
 		FROM event_daily
 		WHERE event_category = ?
-		  AND event_date >= toDate(?)
-		  AND event_date <= toDate(?)
+		  AND event_name = ?
+		  AND ` + timeClause + `
 		GROUP BY nexora_id
 		HAVING sum(event_count) `)
 	b.WriteString(op)
 	b.WriteString(` ?`)
 
 	q := b.String()
-	params := []any{eventCategory, start, end, countVal}
+	params := []any{eventCategory}
+	params = append(params, any(eventName))
+	params = append(params, timeParams...)
+	params = append(params, countVal)
 
 	if db.IsQueryLoggingEnabled() {
-		log.Printf("[ClickHouse] Query: %s | Params: %+v\n", q, params)
+		log.Printf("[ClickHouse] Prefilter Query: %s | Params: %+v\n", q, params)
 	}
 
 	conn := db.GetClickhouse()
@@ -113,7 +128,17 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 	}
 
 	eventCategory := mapEventType(f.EventType)
+	eventName := f.EventName
 
+	// Build WHERE clause for time operator
+	timeClause := "event_date >= toDate(?) AND event_date <= toDate(?)"
+	timeParams := []any{start, end}
+	if f.Time.Operator == "before" {
+		timeClause = "event_date < toDate(?)"
+		timeParams = []any{f.Time.DayValue}
+	}
+
+	// Optional nested query conditions
 	var whereExtra string
 	var args []any
 	if f.Query != nil && *f.Query != "" {
@@ -126,29 +151,48 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 	}
 
 	inPh := makePlaceholders(len(nexoraIDs))
-	where := `
+	baseWhere := `
 		WHERE event_category = ?
-		  AND event_date >= toDate(?)
-		  AND event_date <= toDate(?)
+		  AND event_name = ?
+		  AND ` + timeClause + `
 		  AND nexora_id IN (` + inPh + `)
 	`
 	if whereExtra != "" {
-		where += " AND " + whereExtra
+		baseWhere += " AND " + whereExtra
 	}
 
-	q := `
-		SELECT DISTINCT nexora_id, client_id
-		FROM events
-	` + where
+	var q string
+	if f.Condition == "has_performed" {
+		q = `
+			SELECT DISTINCT nexora_id, client_id
+			FROM events
+		` + baseWhere
+	} else if f.Condition == "has_not_performed" {
+		// Anti-join: All candidates MINUS those who performed
+		q = `
+			SELECT DISTINCT nexora_id, client_id
+			FROM customer_profiles
+			WHERE nexora_id IN (` + inPh + `)
+			  AND nexora_id NOT IN (
+				SELECT nexora_id
+				FROM events
+				` + baseWhere + `
+			  )
+		`
+	} else {
+		return nil, fmt.Errorf("unsupported condition: %s", f.Condition)
+	}
 
-	params := []any{eventCategory, start, end}
+	params := []any{eventCategory}
+	params = append(params, any(eventName))
+	params = append(params, timeParams...)
 	for _, id := range nexoraIDs {
 		params = append(params, id)
 	}
 	params = append(params, args...)
 
 	if db.IsQueryLoggingEnabled() {
-		log.Printf("[ClickHouse] Query: %s | Params: %+v\n", q, params)
+		log.Printf("[ClickHouse] DeepFilter Query: %s | Params: %+v\n", q, params)
 	}
 
 	conn := db.GetClickhouse()
@@ -199,12 +243,6 @@ func mapCountOperator(op string) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported count.operator: %s", op)
 	}
-}
-
-func parseIntStrict(s string) (int, error) {
-	var n int
-	_, err := fmt.Sscanf(strings.TrimSpace(s), "%d", &n)
-	return n, err
 }
 
 func makePlaceholders(n int) string {
