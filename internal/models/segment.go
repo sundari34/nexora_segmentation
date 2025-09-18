@@ -1,6 +1,10 @@
 package models
 
-import "github.com/nexora/nexora_segmentation/internal/utils"
+import (
+	"encoding/json"
+
+	"github.com/nexora/nexora_segmentation/internal/utils"
+)
 
 // Payload matches what your UI sends
 type SegmentPayload struct {
@@ -23,28 +27,17 @@ type Filter struct {
 	Condition string    `json:"condition"`  // e.g., "has_performed"
 	Time      TimeRule  `json:"time"`
 	Count     CountRule `json:"count"`
-	Query     *string   `json:"query"` // RQB JSON string or null
+	//Query     *string   `json:"query"` // RQB JSON string or null
+	Query json.RawMessage `json:"query"` // RQB JSON string or null
 }
 
-// type TimeRule struct {
-// 	Operator string  `json:"operator"`
-// 	Start    *string `json:"start,omitempty"`
-// 	End      *string `json:"end,omitempty"`
-// 	Value    *string `json:"value,omitempty"`
-// 	DayValue *int    `json:"day_value,omitempty"`
-// }
-
-// type CountRule struct {
-// 	Operator string `json:"operator"` // equal_to, greater_than, less_than, at_least, at_most
-// 	Value    string `json:"value"`    // integer as string
-// }
-
 type TimeRule struct {
-	Operator string                `json:"operator"`
-	Start    *utils.FlexibleString `json:"start,omitempty"`
-	End      *utils.FlexibleString `json:"end,omitempty"`
-	Value    *utils.FlexibleString `json:"value,omitempty"`
-	DayValue *int                  `json:"day_value,omitempty"`
+	Operator      string                `json:"operator"`
+	Start         *utils.FlexibleString `json:"start"`
+	End           *utils.FlexibleString `json:"end"`
+	Value         *utils.FlexibleString `json:"value"`
+	DayValue      *utils.FlexibleString `json:"day_value"`
+	DayCountValue *utils.FlexibleString `json:"day_count_value"`
 }
 
 type CountRule struct {

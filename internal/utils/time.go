@@ -6,7 +6,7 @@ import (
 )
 
 // DeriveDateRange calculates the date range based on operator and inputs
-func DeriveDateRange(operator string, start, end, value *FlexibleString, now time.Time, loc *time.Location) (string, string, error) {
+func DeriveDateRange(operator string, start, end, value, dayValue, dayCountValue *FlexibleString, now time.Time, loc *time.Location) (string, string, error) {
 	var startDate, endDate time.Time
 	var err error
 
@@ -37,27 +37,45 @@ func DeriveDateRange(operator string, start, end, value *FlexibleString, now tim
 		endDate = startDate
 
 	case "before":
-		endDate, err = parseDate(value)
+		//endDate, err = parseDate(value)
+
+		v := value
+		if (v == nil || v.IsEmpty()) && dayValue != nil {
+			v = dayValue
+		}
+		endDate, err = parseDate(v)
 		if err != nil {
 			return "", "", err
 		}
 		startDate = time.Date(1970, 1, 1, 0, 0, 0, 0, loc)
 
 	case "after":
-		startDate, err = parseDate(value)
+		v := value
+		if (v == nil || v.IsEmpty()) && dayValue != nil {
+			v = dayValue
+		}
+		startDate, err = parseDate(v)
 		if err != nil {
 			return "", "", err
 		}
 		endDate = now
 
 	case "last_n_days":
-		if value == nil || value.IsEmpty() {
-			return "", "", fmt.Errorf("time.value required for last_n_days")
+		var days int
+		if dayCountValue != nil && !dayCountValue.IsEmpty() {
+			days, err = dayCountValue.ToInt()
+			if err != nil {
+				return "", "", err
+			}
+		} else if value != nil && !value.IsEmpty() {
+			days, err = value.ToInt()
+			if err != nil {
+				return "", "", err
+			}
+		} else {
+			return "", "", fmt.Errorf("time.day_count_value or time.value required for last_n_days")
 		}
-		days, err := value.ToInt()
-		if err != nil {
-			return "", "", err
-		}
+
 		endDate = now
 		startDate = now.AddDate(0, 0, -days)
 

@@ -46,7 +46,7 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 	f := req.Groups[0].Filters[0]
 
 	loc, _ := time.LoadLocation("Asia/Kolkata")
-	start, end, err := utils.DeriveDateRange(f.Time.Operator, f.Time.Start, f.Time.End, f.Time.Value, time.Now(), loc)
+	start, end, err := utils.DeriveDateRange(f.Time.Operator, f.Time.Start, f.Time.End, f.Time.Value, f.Time.DayValue, f.Time.DayCountValue, time.Now(), loc)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 	f := req.Groups[0].Filters[0]
 
 	loc, _ := time.LoadLocation("Asia/Kolkata")
-	start, end, err := utils.DeriveDateRange(f.Time.Operator, f.Time.Start, f.Time.End, f.Time.Value, time.Now(), loc)
+	start, end, err := utils.DeriveDateRange(f.Time.Operator, f.Time.Start, f.Time.End, f.Time.Value, f.Time.DayValue, f.Time.DayCountValue, time.Now(), loc)
 	if err != nil {
 		return nil, err
 	}
@@ -141,8 +141,17 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 	// Optional nested query conditions
 	var whereExtra string
 	var args []any
-	if f.Query != nil && *f.Query != "" {
-		w, a, err := buildWhereFromRQB(*f.Query)
+	// if f.Query != nil && *f.Query != "" {
+	// 	w, a, err := buildWhereFromRQB(*f.Query)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	whereExtra = w
+	// 	args = append(args, a...)
+	// }
+
+	if len(f.Query) > 0 { // non-empty RawMessage means we got some JSON
+		w, a, err := buildWhereFromRQB(string(f.Query)) // convert []byte to string
 		if err != nil {
 			return nil, err
 		}

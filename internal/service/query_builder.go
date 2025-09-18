@@ -14,18 +14,32 @@ type rqbRoot struct {
 	Not        bool      `json:"not"`
 }
 
+// type rqbRule struct {
+// 	ID          string `json:"id"`
+// 	Field       string `json:"field"`    // e.g., "app"
+// 	Operator    string `json:"operator"` // "=" etc.
+// 	ValueSource string `json:"valueSource"`
+// 	Value       any    `json:"value"` // could be scalar or group
+// 	Combinator  string `json:"combinator"`
+// 	Not         bool   `json:"not"`
+// 	Match       *struct {
+// 		Mode      string `json:"mode"`
+// 		Threshold int    `json:"threshold"`
+// 	} `json:"match"`
+// }
+
 type rqbRule struct {
-	ID          string `json:"id"`
-	Field       string `json:"field"`    // e.g., "app"
-	Operator    string `json:"operator"` // "=" etc.
-	ValueSource string `json:"valueSource"`
-	Value       any    `json:"value"` // could be scalar or group
-	Combinator  string `json:"combinator"`
-	Not         bool   `json:"not"`
+	ID          string      `json:"id"`
+	Field       string      `json:"field"`
+	Operator    string      `json:"operator"`
+	ValueSource string      `json:"valueSource"`
+	Value       interface{} `json:"value"`
+	Combinator  string      `json:"combinator,omitempty"`
+	Not         bool        `json:"not,omitempty"`
 	Match       *struct {
 		Mode      string `json:"mode"`
 		Threshold int    `json:"threshold"`
-	} `json:"match"`
+	} `json:"match,omitempty"`
 }
 
 // Very small mapper: supports "app.build_number" == "<num>" → column "app_build_number"
