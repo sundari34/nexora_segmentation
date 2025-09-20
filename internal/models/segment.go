@@ -6,13 +6,42 @@ import (
 	"github.com/nexora/nexora_segmentation/internal/utils"
 )
 
-// Payload matches what your UI sends
+// Payload matches what your UI sends (old *or* new)
 type SegmentPayload struct {
 	SegmentID      string      `json:"segment_id,omitempty"` // optional: pass via payload or query param
-	SegmentName    string      `json:"segment_name"`
-	SegmentType    string      `json:"segment_type"`    // e.g., "past"
-	GroupCondition string      `json:"group_condition"` // "and" / "or" (across groups)
-	Groups         []RuleGroup `json:"groups"`
+	SegmentName    string      `json:"segment_name,omitempty"`
+	SegmentType    string      `json:"segment_type,omitempty"`    // e.g., "past"
+	GroupCondition string      `json:"group_condition,omitempty"` // "and" / "or" (across groups)
+	Groups         []RuleGroup `json:"groups,omitempty"`
+}
+
+// NOTE: new top-level payload is an array of group-like objects.
+// To remain backwards compatible we implement a custom Unmarshal below
+// which accepts either:
+//   - old object: { "groups": [...] , "segment_name": ... }
+//   - new array: [ { "filters": [...], "matchMode": "and" }, ... ]
+func (sp *SegmentPayload) UnmarshalJSON(b []byte) error {
+	// try the object form first
+	type alias SegmentPayload
+	var obj alias
+	if err := json.Unmarshal(b, &obj); err == nil && (len(obj.Groups) > 0 || obj.SegmentName != "") {
+		*sp = SegmentPayload(obj)
+		return nil
+	}
+
+	// fallback: try array-of-groups form
+	var groups []RuleGroup
+	if err := json.Unmarshal(b, &groups); err == nil && len(groups) > 0 {
+		sp.Groups = groups
+		return nil
+	}
+
+	// last attempt: maybe it's an empty object, just unmarshal into alias (gives zero values)
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return err
+	}
+	*sp = SegmentPayload(obj)
+	return nil
 }
 
 type RuleGroup struct {
@@ -20,29 +49,73 @@ type RuleGroup struct {
 	Filters   []Filter `json:"filters"`
 }
 
+// Filter supports both the old flattened schema AND the new nested "condition" schema.
+// The evaluator will prefer the Condition block when non-nil.
 type Filter struct {
-	EventType string    `json:"event_type"` // e.g., "System Events"
-	EventName string    `json:"event_name"` // e.g., "App opened"
-	EventID   int       `json:"event_id"`   // UI event id (optional mapping)
-	Condition string    `json:"condition"`  // e.g., "has_performed"
-	Time      TimeRule  `json:"time"`
-	Count     CountRule `json:"count"`
-	//Query     *string   `json:"query"` // RQB JSON string or null
-	Query json.RawMessage `json:"query"` // RQB JSON string or null
+	// Old / flattened fields (kept for backward compatibility)
+	EventType string          `json:"event_type,omitempty"`      // e.g., "System Events"
+	EventName string          `json:"event_name,omitempty"`      // e.g., "App opened"
+	EventID   int             `json:"event_id,omitempty"`        // UI event id (optional mapping)
+	Condition string          `json:"condition_block,omitempty"` // e.g., "has_performed"
+	Time      TimeRule        `json:"time,omitempty"`
+	Count     CountRule       `json:"count,omitempty"`
+	Query     json.RawMessage `json:"query,omitempty"` // RQB JSON string or null
+
+	// New / nested form
+	ConditionBlock *ConditionRule `json:"condition,omitempty"`
+	FilterCategory string         `json:"filter_category,omitempty"`
 }
 
+// New condition block (matches new payload)
+type ConditionRule struct {
+	Time         ConditionTime  `json:"time,omitempty"`
+	Count        ConditionCount `json:"count,omitempty"`
+	EventID      int            `json:"event_id,omitempty"`
+	Condition    string         `json:"condition,omitempty"`
+	EventName    string         `json:"event_name,omitempty"`
+	EventType    string         `json:"event_type,omitempty"`
+	EventDetails struct {
+		ID    int    `json:"id,omitempty"`
+		Name  string `json:"name,omitempty"`
+		Label string `json:"label,omitempty"`
+	} `json:"event_details,omitempty"`
+}
+
+// Old TimeRule kept with extra fields to allow translation from new payload.
 type TimeRule struct {
-	Operator      string                `json:"operator"`
-	Start         *utils.FlexibleString `json:"start"`
-	End           *utils.FlexibleString `json:"end"`
-	Value         *utils.FlexibleString `json:"value"`
-	DayValue      *utils.FlexibleString `json:"day_value"`
-	DayCountValue *utils.FlexibleString `json:"day_count_value"`
+	Operator      string                `json:"operator,omitempty"`
+	Start         *utils.FlexibleString `json:"start,omitempty"`
+	End           *utils.FlexibleString `json:"end,omitempty"`
+	Value         *utils.FlexibleString `json:"value,omitempty"`
+	DayValue      *utils.FlexibleString `json:"day_value,omitempty"`
+	DayCountValue *utils.FlexibleString `json:"day_count_value,omitempty"`
+
+	// Also accept new-name fields (start_date/end_date) for direct unmarshalling
+	StartDate *utils.FlexibleString `json:"start_date,omitempty"`
+	EndDate   *utils.FlexibleString `json:"end_date,omitempty"`
 }
 
+// Old CountRule kept and expanded to include min/max (new payload supports min/max)
 type CountRule struct {
-	Operator string               `json:"operator"`
-	Value    utils.FlexibleString `json:"value"`
+	Operator string                `json:"operator,omitempty"`
+	Value    utils.FlexibleString  `json:"value,omitempty"`
+	Min      *utils.FlexibleString `json:"min,omitempty"`
+	Max      *utils.FlexibleString `json:"max,omitempty"`
+}
+
+// ConditionTime/Count types that map 1:1 with new payload (kept small)
+type ConditionTime struct {
+	Value     *utils.FlexibleString `json:"value,omitempty"`
+	StartDate *utils.FlexibleString `json:"start_date,omitempty"`
+	EndDate   *utils.FlexibleString `json:"end_date,omitempty"`
+	Operator  string                `json:"operator,omitempty"`
+}
+
+type ConditionCount struct {
+	Max      *utils.FlexibleString `json:"max,omitempty"`
+	Min      *utils.FlexibleString `json:"min,omitempty"`
+	Value    *utils.FlexibleString `json:"value,omitempty"`
+	Operator string                `json:"operator,omitempty"`
 }
 
 // Response member

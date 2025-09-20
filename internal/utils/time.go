@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -18,7 +19,7 @@ func DeriveDateRange(operator string, start, end, value, dayValue, dayCountValue
 		return time.ParseInLocation("2006-01-02", fs.String(), loc)
 	}
 
-	switch operator {
+	switch strings.ToLower(operator) {
 	case "between":
 		startDate, err = parseDate(start)
 		if err != nil {

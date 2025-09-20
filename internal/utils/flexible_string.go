@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"fmt"
 	"strconv"
 )
 
@@ -24,9 +23,16 @@ func (fs *FlexibleString) UnmarshalJSON(data []byte) error {
 }
 
 // ToInt converts the underlying value to int.
+// func (fs *FlexibleString) ToInt() (int, error) {
+// 	if fs == nil || fs.Value == "" {
+// 		return 0, fmt.Errorf("empty FlexibleString")
+// 	}
+// 	return strconv.Atoi(fs.Value)
+// }
+
 func (fs *FlexibleString) ToInt() (int, error) {
-	if fs == nil || fs.Value == "" {
-		return 0, fmt.Errorf("empty FlexibleString")
+	if fs == nil || fs.IsEmpty() {
+		return 0, nil // return 0 for empty instead of error
 	}
 	return strconv.Atoi(fs.Value)
 }
