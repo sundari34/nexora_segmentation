@@ -76,107 +76,117 @@ func normalizeFilter(f models.Filter) (normalizedTime, normalizedCount, int, str
 }
 
 // ---------------------- PREFILTER ----------------------
+// ---------------------- PREFILTER ----------------------
 func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
-	if len(req.Groups) == 0 || len(req.Groups[0].Filters) == 0 {
+	if len(req.Groups) == 0 {
 		return nil, fmt.Errorf("no filters provided")
 	}
 
+	loc, _ := time.LoadLocation("Asia/Kolkata")
+	var whereClauses []string
+	var havingClauses []string
+	var params []any
+	var havingParams []any
+
 	for gi, group := range req.Groups {
+		if len(group.Filters) == 0 {
+			continue
+		}
+
+		var groupWhere []string
+		var groupHaving []string
+		var groupParams []any
+		var groupHavingParams []any
+
 		for fi, f := range group.Filters {
 			nt, nc, _, _, _ := normalizeFilter(f)
-			log.Printf("[DEBUG] Group %d, Filter %d, Time operator: %q, Count operator: %q", gi, fi, nt.Operator, nc.Operator)
 
-			loc, _ := time.LoadLocation("Asia/Kolkata")
-			_, _, err := utils.DeriveDateRange(nt.Operator, nt.Start, nt.End, nt.Value, nt.DayValue, nt.DayCount, time.Now(), loc)
+			start, end, err := utils.DeriveDateRange(nt.Operator, nt.Start, nt.End, nt.Value, nt.DayValue, nt.DayCount, time.Now(), loc)
 			if err != nil {
-				return nil, fmt.Errorf("DeriveDateRange failed at group %d filter %d: %w", gi, fi, err)
+				return nil, fmt.Errorf("DeriveDateRange failed at group %d filter %d: %v", gi, fi, err)
 			}
 
-			op := nc.Operator
-			mapped, err := mapCountOperator(op)
-			if err != nil {
-				return nil, fmt.Errorf("mapCountOperator failed at group %d filter %d: %w", gi, fi, err)
+			eventCategory := mapEventType(f.EventType)
+			eventName := f.EventName
+			if f.ConditionBlock != nil {
+				eventCategory = mapEventType(f.ConditionBlock.EventType)
+				eventName = f.ConditionBlock.EventName
 			}
-			log.Printf("[DEBUG] Mapped count operator: %s", mapped)
+
+			// WHERE: row-level
+			timeClause := "event_date >= toDate(?) AND event_date <= toDate(?)"
+			timeParams := []any{start, end}
+			if strings.ToLower(nt.Operator) == "before" {
+				single := nt.Value
+				if single == nil {
+					single = nt.DayValue
+				}
+				timeClause = "event_date < toDate(?)"
+				timeParams = []any{single}
+			}
+
+			whereClause := "(event_category = ? AND event_name = ? AND " + timeClause + ")"
+			groupWhere = append(groupWhere, whereClause)
+			groupParams = append(groupParams, eventCategory, eventName)
+			groupParams = append(groupParams, timeParams...)
+
+			// HAVING: aggregate-level
+			var havingClause string
+			switch strings.ToLower(nc.Operator) {
+			case "between":
+				if nc.Min == nil || nc.Max == nil {
+					return nil, fmt.Errorf("between operator requires min and max")
+				}
+				havingClause = "sum(event_count) >= ? AND sum(event_count) <= ?"
+				groupHavingParams = append(groupHavingParams, nc.Min.String(), nc.Max.String())
+			default:
+				mapped, err := mapCountOperator(nc.Operator)
+				if err != nil {
+					return nil, err
+				}
+				if nc.Value == nil {
+					return nil, fmt.Errorf("count value required")
+				}
+				valInt, err := nc.Value.ToInt()
+				if err != nil {
+					return nil, fmt.Errorf("invalid count.value: %v", err)
+				}
+				havingClause = fmt.Sprintf("sum(event_count) %s ?", mapped)
+				groupHavingParams = append(groupHavingParams, valInt)
+			}
+			groupHaving = append(groupHaving, havingClause)
 		}
+
+		// combine filters within group
+		whereClauses = append(whereClauses, "("+strings.Join(groupWhere, " "+strings.ToUpper(group.MatchMode)+" ")+")")
+		if len(groupHaving) > 0 {
+			havingClauses = append(havingClauses, "("+strings.Join(groupHaving, " AND ")+")")
+			havingParams = append(havingParams, groupHavingParams...)
+		}
+		params = append(params, groupParams...)
 	}
 
-	f := req.Groups[0].Filters[0]
-	nt, nc, _, _, _ := normalizeFilter(f)
-
-	loc, _ := time.LoadLocation("Asia/Kolkata")
-	start, end, err := utils.DeriveDateRange(nt.Operator, nt.Start, nt.End, nt.Value, nt.DayValue, nt.DayCount, time.Now(), loc)
-	if err != nil {
-		return nil, err
-	}
-
-	op := nc.Operator
-	eventCategory := mapEventType(f.EventType)
-	eventName := f.EventName
-	if f.ConditionBlock != nil {
-		eventCategory = mapEventType(f.ConditionBlock.EventType)
-		eventName = f.ConditionBlock.EventName
-	}
-
-	timeClause := "event_date >= toDate(?) AND event_date <= toDate(?)"
-	timeParams := []any{start, end}
-	if strings.ToLower(nt.Operator) == "before" {
-		single := nt.Value
-		if single == nil {
-			single = nt.DayValue
-		}
-		timeClause = "event_date < toDate(?)"
-		timeParams = []any{single}
-	}
-
-	var havingClause string
-	var params []any
-
-	switch strings.ToLower(op) {
-	case "between":
-		if nc.Min == nil || nc.Max == nil {
-			return nil, fmt.Errorf("between operator requires min and max")
-		}
-		havingClause = "HAVING sum(event_count) >= ? AND sum(event_count) <= ?"
-		params = append(params, eventCategory, eventName)
-		params = append(params, timeParams...)
-		params = append(params, nc.Min.String(), nc.Max.String())
-	default:
-		mapped, err := mapCountOperator(op)
-		if err != nil {
-			return nil, err
-		}
-		valFS := nc.Value
-		if valFS == nil {
-			return nil, fmt.Errorf("count value is required")
-		}
-		countValInt, err := valFS.ToInt()
-		if err != nil {
-			return nil, fmt.Errorf("invalid count.value: %v", err)
-		}
-		havingClause = "HAVING sum(event_count) " + mapped + " ?"
-		params = append(params, eventCategory, eventName)
-		params = append(params, timeParams...)
-		params = append(params, countValInt)
+	finalWhere := strings.Join(whereClauses, " AND ")
+	finalHaving := ""
+	if len(havingClauses) > 0 {
+		finalHaving = "HAVING " + strings.Join(havingClauses, " AND ")
 	}
 
 	q := fmt.Sprintf(`
 		SELECT nexora_id
 		FROM event_daily
-		WHERE event_category = ?
-		  AND event_name = ?
-		  AND %s
-		  GROUP BY nexora_id
+		WHERE %s
+		GROUP BY nexora_id
 		%s
-	`, timeClause, havingClause)
+	`, finalWhere, finalHaving)
 
 	if db.IsQueryLoggingEnabled() {
-		log.Printf("[ClickHouse] Prefilter Query: %s | Params: %+v\n", q, params)
+		log.Printf("[ClickHouse] Prefilter Query: %s | Params: %+v %+v\n", q, params, havingParams)
 	}
 
 	conn := db.GetClickhouse()
 	ctx := context.Background()
-	rows, err := conn.Query(ctx, q, params...)
+	rows, err := conn.Query(ctx, q, append(params, havingParams...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -197,19 +207,6 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member, error) {
 	if len(req.Groups) == 0 || len(req.Groups[0].Filters) == 0 {
 		return nil, fmt.Errorf("no filters provided")
-	}
-
-	for gi, group := range req.Groups {
-		for fi, f := range group.Filters {
-			nt, _, _, condStr, _ := normalizeFilter(f)
-			log.Printf("[DEBUG] DeepFilter Group %d, Filter %d, Time operator: %q, Condition: %q", gi, fi, nt.Operator, condStr)
-
-			loc, _ := time.LoadLocation("Asia/Kolkata")
-			_, _, err := utils.DeriveDateRange(nt.Operator, nt.Start, nt.End, nt.Value, nt.DayValue, nt.DayCount, time.Now(), loc)
-			if err != nil {
-				return nil, fmt.Errorf("DeepFilter DeriveDateRange failed at group %d filter %d: %w", gi, fi, err)
-			}
-		}
 	}
 
 	f := req.Groups[0].Filters[0]
