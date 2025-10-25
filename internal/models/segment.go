@@ -62,8 +62,9 @@ type Filter struct {
 	Query     json.RawMessage `json:"query,omitempty"` // RQB JSON string or null
 
 	// New / nested form
-	ConditionBlock *ConditionRule `json:"condition,omitempty"`
-	FilterCategory string         `json:"filter_category,omitempty"`
+	ConditionBlock     *ConditionRule      `json:"condition,omitempty"`
+	UserPropertyFilter *UserPropertyFilter `json:"user_property_query,omitempty"`
+	FilterCategory     string              `json:"filter_category,omitempty"`
 }
 
 // New condition block (matches new payload)
@@ -79,6 +80,15 @@ type ConditionRule struct {
 		Name  string `json:"name,omitempty"`
 		Label string `json:"label,omitempty"`
 	} `json:"event_details,omitempty"`
+	Query             *RqbRoot `json:"query,omitempty"`
+	UserPropertyQuery *RqbRoot `json:"user_property_query,omitempty"`
+}
+
+type UserPropertyFilter struct {
+	ID         string    `json:"id,omitempty"`
+	Rules      []RqbRule `json:"rules,omitempty"`
+	Combinator string    `json:"combinator,omitempty"`
+	Not        bool      `json:"not,omitempty"`
 }
 
 // Old TimeRule kept with extra fields to allow translation from new payload.

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -30,52 +31,22 @@ type normalizedCount struct {
 	Max      *utils.FlexibleString
 }
 
-// normalizeFilter extracts normalized time & count from either old or new schema
-func normalizeFilter(f models.Filter) (normalizedTime, normalizedCount, int, string, string) {
-	var nt normalizedTime
-	var nc normalizedCount
-	eventID := f.EventID
-	cond := f.Condition
-	eventName := f.EventName
-	eventType := f.EventType
-
-	if f.ConditionBlock != nil {
-		log.Printf("[DEBUG] Using ConditionBlock, Time operator: %q, Count operator: %q", f.ConditionBlock.Time.Operator, f.ConditionBlock.Count.Operator)
-		// --- TIME ---
-		nt.Operator = strings.ToLower(strings.TrimSpace(f.ConditionBlock.Time.Operator))
-		nt.Value = f.ConditionBlock.Time.Value
-		nt.Start = f.ConditionBlock.Time.StartDate
-		nt.End = f.ConditionBlock.Time.EndDate
-
-		// --- COUNT ---
-		nc.Operator = strings.ToLower(strings.TrimSpace(f.ConditionBlock.Count.Operator))
-		nc.Value = f.ConditionBlock.Count.Value
-		nc.Min = f.ConditionBlock.Count.Min
-		nc.Max = f.ConditionBlock.Count.Max
-
-		eventID = f.ConditionBlock.EventID
-		cond = f.ConditionBlock.Condition
-		eventName = f.ConditionBlock.EventName
-		eventType = f.ConditionBlock.EventType
-	} else {
-		log.Printf("[DEBUG] Using old flattened filter, Time operator: %q, Count operator: %q", f.Time.Operator, f.Count.Operator)
-		nt.Operator = strings.ToLower(strings.TrimSpace(f.Time.Operator))
-		nt.Start = f.Time.Start
-		nt.End = f.Time.End
-		nt.Value = f.Time.Value
-		nt.DayValue = f.Time.DayValue
-		nt.DayCount = f.Time.DayCountValue
-
-		nc.Operator = strings.ToLower(strings.TrimSpace(f.Count.Operator))
-		nc.Value = &f.Count.Value
-		nc.Min = f.Count.Min
-		nc.Max = f.Count.Max
+// ---------------------- MAIN EVALUATE ----------------------
+func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
+	// 1️⃣ Prefilter candidates based on first filter
+	log.Printf("here")
+	nexoraIDs, err := prefilterCandidates(req)
+	if err != nil {
+		return nil, err
+	}
+	if len(nexoraIDs) == 0 {
+		return []models.Member{}, nil
 	}
 
-	return nt, nc, eventID, cond, eventName + "|" + eventType
+	// 2️⃣ Apply deep filter
+	return deepFilter(req, nexoraIDs)
 }
 
-// ---------------------- PREFILTER ----------------------
 // ---------------------- PREFILTER ----------------------
 func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 	if len(req.Groups) == 0 {
@@ -97,9 +68,115 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 		var groupHaving []string
 		var groupParams []any
 		var groupHavingParams []any
+		var userPropertyIDs []string
 
 		for fi, f := range group.Filters {
+			log.Printf("in a loop")
 			nt, nc, _, _, _ := normalizeFilter(f)
+
+			b, err := json.MarshalIndent(f, "", "  ")
+			if err != nil {
+				fmt.Println("error marshalling:", err)
+
+			}
+			fmt.Println(string(b))
+
+			// 🟢 Step 1: Handle user_property_query
+			// if f.ConditionBlock != nil && f.ConditionBlock.UserPropertyQuery != nil {
+			// 	upq := f.ConditionBlock.UserPropertyQuery
+
+			// 	var upqLite utils.UserPropertyQueryLite
+			// 	b, _ := json.Marshal(upq)
+			// 	_ = json.Unmarshal(b, &upqLite)
+
+			// 	// 1️ Build MySQL WHERE + params from utils
+			// 	userPropWhere, userPropParams, err := utils.BuildUserPropertyQuery(&upqLite)
+			// 	if err != nil {
+			// 		return nil, fmt.Errorf("error building user property query for filter %d: %v", fi, err)
+			// 	}
+
+			// 	// 2️ Use centralized connection from db package
+			// 	mysqlConn := db.GetMySQL()
+			// 	if mysqlConn == nil {
+			// 		return nil, fmt.Errorf("mysql connection not initialized")
+			// 	}
+
+			// 	// 3️ Execute query
+			// 	query := fmt.Sprintf("SELECT id FROM customer_profiles WHERE %s", userPropWhere)
+			// 	rows, err := mysqlConn.Query(query, userPropParams...)
+			// 	if err != nil {
+			// 		return nil, fmt.Errorf("mysql user property query failed: %v", err)
+			// 	}
+			// 	defer rows.Close()
+
+			// 	// 4️ Collect matching Nexora IDs
+			// 	var ids []string
+			// 	for rows.Next() {
+			// 		var id string
+			// 		if err := rows.Scan(&id); err == nil {
+			// 			ids = append(ids, id)
+			// 		}
+			// 	}
+
+			// 	// 5️ Deduplicate and merge to global list
+			// 	if len(ids) > 0 {
+			// 		userPropertyIDs = append(userPropertyIDs, ids...)
+			// 	}
+
+			// 	// Skip event filter logic for this filter
+			// 	continue
+			// }
+
+			if f.ConditionBlock != nil && f.ConditionBlock.UserPropertyQuery != nil {
+				upq := f.ConditionBlock.UserPropertyQuery
+
+				var upqLite utils.UserPropertyQueryLite
+				b, _ := json.Marshal(upq)
+				_ = json.Unmarshal(b, &upqLite)
+
+				whereClause, params, err := utils.BuildUserPropertyQuery(&upqLite)
+				if err != nil {
+					return nil, fmt.Errorf("error building user property query: %v", err)
+				}
+
+				mysqlConn := db.GetMySQL()
+				if mysqlConn == nil {
+					return nil, fmt.Errorf("mysql connection not initialized")
+				}
+
+				query := fmt.Sprintf(`
+					SELECT np.nexora_id
+					FROM nexora_profiles np
+					JOIN customer_profiles cp ON np.customer_profile_id = cp.id
+					WHERE %s
+				`, whereClause)
+
+				// Debug: print query and parameters
+				fmt.Println("---- User Property Query ----")
+				fmt.Println("Query:", query)
+				fmt.Println("Params:", params)
+				fmt.Println("-----------------------------")
+
+				rows, err := mysqlConn.Query(query, params...)
+				if err != nil {
+					return nil, fmt.Errorf("error executing user property query: %v", err)
+				}
+				defer rows.Close()
+
+				var ids []string
+				for rows.Next() {
+					var id string
+					if err := rows.Scan(&id); err == nil {
+						ids = append(ids, id)
+					}
+				}
+
+				if len(ids) > 0 {
+					userPropertyIDs = append(userPropertyIDs, ids...)
+				}
+
+				continue
+			}
 
 			start, end, err := utils.DeriveDateRange(nt.Operator, nt.Start, nt.End, nt.Value, nt.DayValue, nt.DayCount, time.Now(), loc)
 			if err != nil {
@@ -157,6 +234,14 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 			groupHaving = append(groupHaving, havingClause)
 		}
 
+		if len(userPropertyIDs) > 0 {
+			placeholder := strings.Repeat("?,", len(userPropertyIDs))
+			placeholder = strings.TrimSuffix(placeholder, ",")
+			groupWhere = append(groupWhere, fmt.Sprintf("nexora_id IN (%s)", placeholder))
+			for _, id := range userPropertyIDs {
+				groupParams = append(groupParams, id)
+			}
+		}
 		// combine filters within group
 		whereClauses = append(whereClauses, "("+strings.Join(groupWhere, " "+strings.ToUpper(group.MatchMode)+" ")+")")
 		if len(groupHaving) > 0 {
@@ -201,6 +286,51 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 		out = append(out, id)
 	}
 	return out, rows.Err()
+}
+
+// normalizeFilter extracts normalized time & count from either old or new schema
+func normalizeFilter(f models.Filter) (normalizedTime, normalizedCount, int, string, string) {
+	var nt normalizedTime
+	var nc normalizedCount
+	eventID := f.EventID
+	cond := f.Condition
+	eventName := f.EventName
+	eventType := f.EventType
+
+	if f.ConditionBlock != nil {
+		log.Printf("[DEBUG] Using ConditionBlock, Time operator: %q, Count operator: %q", f.ConditionBlock.Time.Operator, f.ConditionBlock.Count.Operator)
+		// --- TIME ---
+		nt.Operator = strings.ToLower(strings.TrimSpace(f.ConditionBlock.Time.Operator))
+		nt.Value = f.ConditionBlock.Time.Value
+		nt.Start = f.ConditionBlock.Time.StartDate
+		nt.End = f.ConditionBlock.Time.EndDate
+
+		// --- COUNT ---
+		nc.Operator = strings.ToLower(strings.TrimSpace(f.ConditionBlock.Count.Operator))
+		nc.Value = f.ConditionBlock.Count.Value
+		nc.Min = f.ConditionBlock.Count.Min
+		nc.Max = f.ConditionBlock.Count.Max
+
+		eventID = f.ConditionBlock.EventID
+		cond = f.ConditionBlock.Condition
+		eventName = f.ConditionBlock.EventName
+		eventType = f.ConditionBlock.EventType
+	} else {
+		log.Printf("[DEBUG] Using old flattened filter, Time operator: %q, Count operator: %q", f.Time.Operator, f.Count.Operator)
+		nt.Operator = strings.ToLower(strings.TrimSpace(f.Time.Operator))
+		nt.Start = f.Time.Start
+		nt.End = f.Time.End
+		nt.Value = f.Time.Value
+		nt.DayValue = f.Time.DayValue
+		nt.DayCount = f.Time.DayCountValue
+
+		nc.Operator = strings.ToLower(strings.TrimSpace(f.Count.Operator))
+		nc.Value = &f.Count.Value
+		nc.Min = f.Count.Min
+		nc.Max = f.Count.Max
+	}
+
+	return nt, nc, eventID, cond, eventName + "|" + eventType
 }
 
 // ---------------------- DEEP FILTER ----------------------
@@ -289,21 +419,6 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 		members = append(members, m)
 	}
 	return members, rows.Err()
-}
-
-// ---------------------- MAIN EVALUATE ----------------------
-func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
-	// 1️⃣ Prefilter candidates based on first filter
-	nexoraIDs, err := prefilterCandidates(req)
-	if err != nil {
-		return nil, err
-	}
-	if len(nexoraIDs) == 0 {
-		return []models.Member{}, nil
-	}
-
-	// 2️⃣ Apply deep filter
-	return deepFilter(req, nexoraIDs)
 }
 
 // ---------------------- HELPERS ----------------------
