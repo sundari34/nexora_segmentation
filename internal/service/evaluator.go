@@ -424,9 +424,9 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 // ---------------------- HELPERS ----------------------
 func mapEventType(s string) string {
 	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "system events", "system_event":
+	case "system events", "system_event", "system":
 		return "system_event"
-	case "custom events", "custom_event":
+	case "custom events", "custom_event", "custom":
 		return "custom_event"
 	default:
 		return strings.ToLower(strings.ReplaceAll(s, " ", "_"))
