@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexora-segment
+  labels:
+    app: nexora-segment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nexora-segment
+  template:
+    metadata:
+      labels:
+        app: nexora-segment
+    spec:
+      tolerations:
+        - key: "name"
+          operator: "Equal"
+          value: "nexora-fe"
+          effect: "NoSchedule"
+      containers:
+        - name: nexora-segment
+          image: me-central2-docker.pkg.dev/dammamnexora/nexora-segment/nexora-segment:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8083
+          env:
+            - name: NODE_ENV
+              value: "production"
+
+
+          # ✅ Health checks for frontend
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 6
+
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 5
