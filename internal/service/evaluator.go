@@ -35,12 +35,43 @@ type normalizedCount struct {
 func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 	// 1️⃣ Prefilter candidates based on first filter
 	log.Printf("here")
+	log.Printf("%v", req)
+
 	nexoraIDs, err := prefilterCandidates(req)
+
+	log.Printf("##################################################")
+
 	if err != nil {
 		return nil, err
 	}
+
+	log.Println(len(nexoraIDs))
+
 	if len(nexoraIDs) == 0 {
 		return []models.Member{}, nil
+	}
+
+	// ✅ Check if this is a user_property-only segment
+	isUserPropertyOnly := true
+	for _, group := range req.Groups {
+		for _, f := range group.Filters {
+			if f.FilterCategory != "user_property" {
+				isUserPropertyOnly = false
+				break
+			}
+		}
+		if !isUserPropertyOnly {
+			break
+		}
+	}
+
+	// ✅ If only user_property filters, no deep filtering needed
+	if isUserPropertyOnly {
+		var members []models.Member
+		for _, id := range nexoraIDs {
+			members = append(members, models.Member{NexoraID: id})
+		}
+		return members, nil
 	}
 
 	// 2️⃣ Apply deep filter
@@ -58,9 +89,12 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 	var havingClauses []string
 	var params []any
 	var havingParams []any
-
+	log.Printf("before loop")
 	for gi, group := range req.Groups {
+		log.Printf("entered loop")
+		log.Printf(" Group %v", group)
 		if len(group.Filters) == 0 {
+			log.Printf("no group")
 			continue
 		}
 
@@ -126,6 +160,8 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 			// 	// Skip event filter logic for this filter
 			// 	continue
 			// }
+			//fmt.Println(f.ConditionBlock)
+			//fmt.Println(f.ConditionBlock.UserPropertyQuery)
 
 			if f.ConditionBlock != nil && f.ConditionBlock.UserPropertyQuery != nil {
 				upq := f.ConditionBlock.UserPropertyQuery
@@ -296,6 +332,8 @@ func normalizeFilter(f models.Filter) (normalizedTime, normalizedCount, int, str
 	cond := f.Condition
 	eventName := f.EventName
 	eventType := f.EventType
+	log.Printf("Yyyyyyyyyyyyyyyyyyyyyyyyyy")
+	log.Printf("%+v", f.ConditionBlock)
 
 	if f.ConditionBlock != nil {
 		log.Printf("[DEBUG] Using ConditionBlock, Time operator: %q, Count operator: %q", f.ConditionBlock.Time.Operator, f.ConditionBlock.Count.Operator)
@@ -340,8 +378,10 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 	}
 
 	f := req.Groups[0].Filters[0]
+	log.Printf("%+v", f)
+	log.Printf("%+v", nexoraIDs)
 	nt, _, _, condStr, _ := normalizeFilter(f)
-	log.Printf("condition string: %s", condStr)
+	log.Printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ condition string: %s", condStr)
 
 	loc, _ := time.LoadLocation("Asia/Kolkata")
 	start, end, err := utils.DeriveDateRange(nt.Operator, nt.Start, nt.End, nt.Value, nt.DayValue, nt.DayCount, time.Now(), loc)
