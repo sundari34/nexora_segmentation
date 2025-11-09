@@ -175,20 +175,34 @@ func BuildUserPropertyQuery(upq *UserPropertyQueryLite) (string, []any, error) {
 	var params []any
 
 	for _, rule := range upq.Rules {
-		op := mapSQLOperator(rule.Operator)
-		if op == "" {
-			return "", nil, fmt.Errorf("unsupported operator: %s", rule.Operator)
-		}
-
+		op := strings.ToLower(strings.TrimSpace(rule.Operator))
 		fieldExpr := buildFieldExpression(rule.Field)
-		// For operators like "like", wrap value
-		val := rule.Value
-		if strings.ToLower(op) == "like" {
-			val = fmt.Sprintf("%%%v%%", rule.Value)
-		}
 
-		clauses = append(clauses, fmt.Sprintf("%s %s ?", fieldExpr, op))
-		params = append(params, val)
+		switch op {
+		// ✅ Handle NOT NULL / IS NULL first (no params)
+		case "notnull":
+			clauses = append(clauses, fmt.Sprintf("(%s IS NOT NULL AND %s != '')", fieldExpr, fieldExpr))
+			continue
+
+		case "isnull":
+			clauses = append(clauses, fmt.Sprintf("(%s IS NULL OR %s = '')", fieldExpr, fieldExpr))
+			continue
+
+		default:
+			sqlOp := mapSQLOperator(op)
+			if sqlOp == "" {
+				return "", nil, fmt.Errorf("unsupported operator: %s", rule.Operator)
+			}
+
+			// Handle value formatting (e.g. LIKE)
+			val := rule.Value
+			if strings.ToLower(sqlOp) == "like" {
+				val = fmt.Sprintf("%%%v%%", rule.Value)
+			}
+
+			clauses = append(clauses, fmt.Sprintf("%s %s ?", fieldExpr, sqlOp))
+			params = append(params, val)
+		}
 	}
 
 	combinator := strings.ToUpper(upq.Combinator)

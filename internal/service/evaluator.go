@@ -42,6 +42,7 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 	log.Printf("##################################################")
 
 	if err != nil {
+		log.Printf("Error in processing the payload, some conditions in the properties are not handled : %+v", err)
 		return nil, err
 	}
 
@@ -332,8 +333,6 @@ func normalizeFilter(f models.Filter) (normalizedTime, normalizedCount, int, str
 	cond := f.Condition
 	eventName := f.EventName
 	eventType := f.EventType
-	log.Printf("Yyyyyyyyyyyyyyyyyyyyyyyyyy")
-	log.Printf("%+v", f.ConditionBlock)
 
 	if f.ConditionBlock != nil {
 		log.Printf("[DEBUG] Using ConditionBlock, Time operator: %q, Count operator: %q", f.ConditionBlock.Time.Operator, f.ConditionBlock.Count.Operator)
