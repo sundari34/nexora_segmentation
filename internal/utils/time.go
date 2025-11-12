@@ -83,7 +83,6 @@ func DeriveDateRange(operator string, start, end, value, dayValue, dayCountValue
 	default:
 		return "", "", fmt.Errorf("unsupported operator: %s", operator)
 	}
-
 	return startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), nil
 }
 

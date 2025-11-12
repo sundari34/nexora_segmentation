@@ -39,8 +39,6 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 
 	nexoraIDs, err := prefilterCandidates(req)
 
-	log.Printf("##################################################")
-
 	if err != nil {
 		log.Printf("Error in processing the payload, some conditions in the properties are not handled : %+v", err)
 		return nil, err
@@ -116,54 +114,6 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 			}
 			fmt.Println(string(b))
 
-			// 🟢 Step 1: Handle user_property_query
-			// if f.ConditionBlock != nil && f.ConditionBlock.UserPropertyQuery != nil {
-			// 	upq := f.ConditionBlock.UserPropertyQuery
-
-			// 	var upqLite utils.UserPropertyQueryLite
-			// 	b, _ := json.Marshal(upq)
-			// 	_ = json.Unmarshal(b, &upqLite)
-
-			// 	// 1️ Build MySQL WHERE + params from utils
-			// 	userPropWhere, userPropParams, err := utils.BuildUserPropertyQuery(&upqLite)
-			// 	if err != nil {
-			// 		return nil, fmt.Errorf("error building user property query for filter %d: %v", fi, err)
-			// 	}
-
-			// 	// 2️ Use centralized connection from db package
-			// 	mysqlConn := db.GetMySQL()
-			// 	if mysqlConn == nil {
-			// 		return nil, fmt.Errorf("mysql connection not initialized")
-			// 	}
-
-			// 	// 3️ Execute query
-			// 	query := fmt.Sprintf("SELECT id FROM customer_profiles WHERE %s", userPropWhere)
-			// 	rows, err := mysqlConn.Query(query, userPropParams...)
-			// 	if err != nil {
-			// 		return nil, fmt.Errorf("mysql user property query failed: %v", err)
-			// 	}
-			// 	defer rows.Close()
-
-			// 	// 4️ Collect matching Nexora IDs
-			// 	var ids []string
-			// 	for rows.Next() {
-			// 		var id string
-			// 		if err := rows.Scan(&id); err == nil {
-			// 			ids = append(ids, id)
-			// 		}
-			// 	}
-
-			// 	// 5️ Deduplicate and merge to global list
-			// 	if len(ids) > 0 {
-			// 		userPropertyIDs = append(userPropertyIDs, ids...)
-			// 	}
-
-			// 	// Skip event filter logic for this filter
-			// 	continue
-			// }
-			//fmt.Println(f.ConditionBlock)
-			//fmt.Println(f.ConditionBlock.UserPropertyQuery)
-
 			if f.ConditionBlock != nil && f.ConditionBlock.UserPropertyQuery != nil {
 				upq := f.ConditionBlock.UserPropertyQuery
 
@@ -228,15 +178,31 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 			}
 
 			// WHERE: row-level
-			timeClause := "event_date >= toDate(?) AND event_date <= toDate(?)"
-			timeParams := []any{start, end}
-			if strings.ToLower(nt.Operator) == "before" {
+			var timeClause string
+			var timeParams []any
+
+			op := strings.ToLower(nt.Operator)
+			switch op {
+			case "before":
 				single := nt.Value
 				if single == nil {
 					single = nt.DayValue
 				}
 				timeClause = "event_date < toDate(?)"
 				timeParams = []any{single}
+
+			case "on":
+				single := nt.Value
+				if single == nil {
+					single = nt.DayValue
+				}
+				// ✅ For strict equality (date = given date)
+				timeClause = "event_date = toDate(?)"
+				timeParams = []any{single}
+
+			default:
+				timeClause = "event_date >= toDate(?) AND event_date <= toDate(?)"
+				timeParams = []any{start, end}
 			}
 
 			whereClause := "(event_category = ? AND event_name = ? AND " + timeClause + ")"
@@ -371,14 +337,137 @@ func normalizeFilter(f models.Filter) (normalizedTime, normalizedCount, int, str
 }
 
 // ---------------------- DEEP FILTER ----------------------
+// func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member, error) {
+// 	if len(req.Groups) == 0 || len(req.Groups[0].Filters) == 0 {
+// 		return nil, fmt.Errorf("no filters provided")
+// 	}
+
+// 	f := req.Groups[0].Filters[0]
+// 	log.Printf("%+v", f)
+// 	log.Printf("%+v", nexoraIDs)
+// 	nt, _, _, condStr, _ := normalizeFilter(f)
+// 	log.Printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ condition string: %s", condStr)
+
+// 	loc, _ := time.LoadLocation("Asia/Kolkata")
+// 	start, end, err := utils.DeriveDateRange(nt.Operator, nt.Start, nt.End, nt.Value, nt.DayValue, nt.DayCount, time.Now(), loc)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	log.Printf("+++2222222+++++++++++++++++ ")
+// 	eventCategory := mapEventType(f.EventType)
+// 	eventName := f.EventName
+// 	if f.ConditionBlock != nil {
+// 		eventCategory = mapEventType(f.ConditionBlock.EventType)
+// 		eventName = f.ConditionBlock.EventName
+// 	}
+// 	log.Printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ ")
+// 	timeClause := "event_date >= toDate(?) AND event_date <= toDate(?)"
+// 	timeParams := []any{start, end}
+// 	if strings.ToLower(nt.Operator) == "before" {
+// 		single := nt.Value
+// 		if single == nil {
+// 			single = nt.DayValue
+// 		}
+// 		timeClause = "event_date < toDate(?)"
+// 		timeParams = []any{single}
+// 	}
+
+// 	inPh := makePlaceholders(len(nexoraIDs))
+// 	baseWhere := fmt.Sprintf(`
+// 		WHERE event_category = ?
+// 		  AND event_name = ?
+// 		  AND %s
+// 		  AND nexora_id IN (%s)
+// 	`, timeClause, inPh)
+
+// 	var q string
+// 	cond := f.Condition
+// 	if f.ConditionBlock != nil {
+// 		cond = f.ConditionBlock.Condition
+// 	}
+
+// 	if cond == "has_performed" {
+// 		q = `SELECT DISTINCT nexora_id, client_id FROM events` + baseWhere
+// 	} else if cond == "has_not_performed" {
+// 		q = fmt.Sprintf(`
+// 			SELECT DISTINCT nexora_id, client_id
+// 			FROM customer_profiles
+// 			WHERE nexora_id IN (%s)
+// 			  AND nexora_id NOT IN (
+// 				SELECT nexora_id FROM events %s
+// 			  )
+// 		`, inPh, baseWhere)
+// 	} else {
+// 		return nil, fmt.Errorf("unsupported condition: %s", cond)
+// 	}
+
+// 	params := []any{eventCategory, eventName}
+// 	params = append(params, timeParams...)
+// 	for _, id := range nexoraIDs {
+// 		params = append(params, id)
+// 	}
+
+// 	conn := db.GetClickhouse()
+// 	ctx := context.Background()
+// 	rows, err := conn.Query(ctx, q, params...)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer rows.Close()
+
+// 	var members []models.Member
+// 	for rows.Next() {
+// 		var m models.Member
+// 		if err := rows.Scan(&m.NexoraID, &m.ClientID); err != nil {
+// 			return nil, err
+// 		}
+// 		members = append(members, m)
+// 	}
+// 	return members, rows.Err()
+// }
+
 func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member, error) {
 	if len(req.Groups) == 0 || len(req.Groups[0].Filters) == 0 {
 		return nil, fmt.Errorf("no filters provided")
 	}
 
-	f := req.Groups[0].Filters[0]
+	// Find the first event filter in the first group (or any group if you prefer)
+	var eventFilter *models.Filter
+	for gi := range req.Groups {
+		for fi := range req.Groups[gi].Filters {
+			f := &req.Groups[gi].Filters[fi]
+			// prefer explicit event category
+			if strings.ToLower(strings.TrimSpace(f.FilterCategory)) == "event" {
+				eventFilter = f
+				break
+			}
+			// fallback: if ConditionBlock has time or event_name/event_type info treat as event
+			if f.ConditionBlock != nil && (f.ConditionBlock.Time.Operator != "" ||
+				f.ConditionBlock.EventName != "" || f.ConditionBlock.EventType != "") {
+				eventFilter = f
+				break
+			}
+		}
+		if eventFilter != nil {
+			break
+		}
+	}
+
+	if eventFilter == nil {
+		// No event filter found — nothing to deep-filter. Return empty slice or prefiltered members.
+		// Prefer returning prefiltered members (nexoraIDs -> members) so caller gets final list.
+		var members []models.Member
+		for _, id := range nexoraIDs {
+			members = append(members, models.Member{NexoraID: id})
+		}
+		return members, nil
+	}
+
+	// use the found eventFilter from here on
+	f := *eventFilter
 	log.Printf("%+v", f)
 	log.Printf("%+v", nexoraIDs)
+
 	nt, _, _, condStr, _ := normalizeFilter(f)
 	log.Printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ condition string: %s", condStr)
 
@@ -395,15 +484,30 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 		eventName = f.ConditionBlock.EventName
 	}
 
-	timeClause := "event_date >= toDate(?) AND event_date <= toDate(?)"
-	timeParams := []any{start, end}
-	if strings.ToLower(nt.Operator) == "before" {
+	// build time clause — handle "on" / "before" / default (range)
+	var timeClause string
+	var timeParams []any
+
+	op := strings.ToLower(strings.TrimSpace(nt.Operator))
+	switch op {
+	case "before":
 		single := nt.Value
 		if single == nil {
 			single = nt.DayValue
 		}
 		timeClause = "event_date < toDate(?)"
 		timeParams = []any{single}
+	case "on":
+		single := nt.Value
+		if single == nil {
+			single = nt.DayValue
+		}
+		// equality by date; if event_date is DateTime you can expand to full day
+		timeClause = "event_date = toDate(?)"
+		timeParams = []any{single}
+	default:
+		timeClause = "event_date >= toDate(?) AND event_date <= toDate(?)"
+		timeParams = []any{start, end}
 	}
 
 	inPh := makePlaceholders(len(nexoraIDs))
