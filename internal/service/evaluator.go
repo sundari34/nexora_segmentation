@@ -94,8 +94,8 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 
 			q := fmt.Sprintf(`
 				SELECT %s
-				FROM event_daily
-				WHERE nexora_id = '%s' %s
+				FROM customer_profiles
+				WHERE id in (select customer_profile_id from nexora_profiles where nexora_id = '%s') %s
 			`, userPropertySql, id, where)
 
 			rows, err := conn.Query(ctx, q)
