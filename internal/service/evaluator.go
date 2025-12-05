@@ -562,6 +562,8 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 
 	conn := db.GetClickhouse()
 	ctx := context.Background()
+	fmt.Println(q)
+	fmt.Println("((((((((q))))))))")
 	rows, err := conn.Query(ctx, q, params...)
 	if err != nil {
 		return nil, err
