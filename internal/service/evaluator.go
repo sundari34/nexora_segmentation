@@ -524,12 +524,28 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 		cond = f.ConditionBlock.Condition
 	}
 
+	// check user property
+	userPropertySql := ""
+	if req.Property != "" {
+		userPropertySql = fmt.Sprintf(", COALESCE(JSON_UNQUOTE(JSON_EXTRACT(user_properties, '$.%s')), 'default') AS property", req.Property)
+	}
+
+	if req.Channel != "" {
+		if req.Channel == "email" {
+			baseWhere += " AND email is not NULL AND email != ''"
+		} else if req.Channel == "mobile" || req.Channel == "sms" {
+			baseWhere += " AND mobile is not NULL AND mobile != ''"
+		} else if req.Channel == "push" || req.Channel == "web_push" {
+			baseWhere += " AND id in (select external_user_id from notification_tokens where token is not null and token != '')"
+		}
+	}
+
 	if cond == "has_performed" {
-		q = `SELECT DISTINCT nexora_id, client_id FROM events` + baseWhere
+		q = `SELECT DISTINCT nexora_id, client_id` + userPropertySql + `FROM events` + baseWhere
 	} else if cond == "has_not_performed" {
 		q = fmt.Sprintf(`
-			SELECT DISTINCT nexora_id, client_id
-			FROM customer_profiles
+			SELECT DISTINCT nexora_id, client_id`+userPropertySql+
+			`FROM customer_profiles
 			WHERE nexora_id IN (%s)
 			  AND nexora_id NOT IN (
 				SELECT nexora_id FROM events %s
@@ -538,7 +554,6 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 	} else {
 		return nil, fmt.Errorf("unsupported condition: %s", cond)
 	}
-
 	params := []any{eventCategory, eventName}
 	params = append(params, timeParams...)
 	for _, id := range nexoraIDs {

@@ -13,6 +13,8 @@ type SegmentPayload struct {
 	SegmentType    string      `json:"segment_type,omitempty"`    // e.g., "past"
 	GroupCondition string      `json:"group_condition,omitempty"` // "and" / "or" (across groups)
 	Groups         []RuleGroup `json:"groups,omitempty"`
+	Property       string      `json:"property,omitempty"`
+	Channel        string      `json:"channel,omitempty"`
 }
 
 // NOTE: new top-level payload is an array of group-like objects.
@@ -132,4 +134,5 @@ type ConditionCount struct {
 type Member struct {
 	NexoraID string `json:"nexora_id"`
 	ClientID string `json:"client_id"`
+	Property string `json:"property"`
 }
