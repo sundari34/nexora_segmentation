@@ -66,10 +66,59 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 
 	// ✅ If only user_property filters, no deep filtering needed
 	if isUserPropertyOnly {
+		conn := db.GetClickhouse()
+		ctx := context.Background()
 		var members []models.Member
 		for _, id := range nexoraIDs {
-			members = append(members, models.Member{NexoraID: id})
+			userPropertySql := ""
+			where := ""
+
+			if req.Property != "" {
+				userPropertySql = fmt.Sprintf(
+					"COALESCE(JSON_UNQUOTE(JSON_EXTRACT(user_properties, '$.%s')), 'default') AS property",
+					req.Property,
+				)
+			} else {
+				userPropertySql = "'' AS property" // always return a column
+			}
+
+			if req.Channel != "" {
+				if req.Channel == "email" {
+					where += " AND email IS NOT NULL AND email != ''"
+				} else if req.Channel == "mobile" || req.Channel == "sms" {
+					where += " AND mobile IS NOT NULL AND mobile != ''"
+				} else if req.Channel == "push" || req.Channel == "web_push" {
+					where += " AND id IN (SELECT external_user_id FROM notification_tokens WHERE token IS NOT NULL AND token != '')"
+				}
+			}
+
+			q := fmt.Sprintf(`
+				SELECT %s
+				FROM event_daily
+				WHERE nexora_id = '%s' %s
+			`, userPropertySql, id, where)
+
+			rows, err := conn.Query(ctx, q)
+			if err != nil {
+				return nil, err
+			}
+			defer rows.Close()
+
+			propertyValue := "" // default
+
+			if rows.Next() {
+				err := rows.Scan(&propertyValue)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			members = append(members, models.Member{
+				NexoraID: id,
+				Property: propertyValue,
+			})
 		}
+
 		return members, nil
 	}
 
