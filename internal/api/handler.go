@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/nexora/nexora_segmentation/internal/models"
@@ -13,6 +14,8 @@ import (
 // Query (optional): ?segment_id=abc-123 (will override payload's SegmentID)
 func EvaluateHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
+	fmt.Println(r.Body)
+	fmt.Println("(((((((((((((((((((((r.Body)))))))))))))))))))))")
 	var req models.SegmentPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
