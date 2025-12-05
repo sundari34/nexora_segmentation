@@ -89,6 +89,8 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 	var params []any
 	var havingParams []any
 	log.Printf("before loop")
+	fmt.Println(req)
+	fmt.Println("((((((((((((((((((((((((((((((((((req))))))))))))))))))))))----------------)))))))))))))")
 	for gi, group := range req.Groups {
 		log.Printf("entered loop")
 		log.Printf(" Group %v", group)
