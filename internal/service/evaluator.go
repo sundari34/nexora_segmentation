@@ -286,7 +286,7 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 		%s
 	`, userPropertySql, finalWhere, finalHaving)
 	fmt.Println(q)
-	fmt.Println("FInal Query ------------------------------------")
+	fmt.Println("Final Query ------------------------------------")
 	if db.IsQueryLoggingEnabled() {
 		log.Printf("[ClickHouse] Prefilter Query: %s | Params: %+v %+v\n", q, params, havingParams)
 	}

@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/nexora/nexora_segmentation/internal/utils"
 )
@@ -42,6 +43,8 @@ func (sp *SegmentPayload) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &obj); err != nil {
 		return err
 	}
+	fmt.Println(obj)
+	fmt.Println("((((((((((((((((((((((((((((((((((((((((((((((obj))))))))))))))))))))))))))))))))))))))))))))))")
 	*sp = SegmentPayload(obj)
 	return nil
 }
