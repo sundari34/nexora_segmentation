@@ -66,10 +66,11 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 
 	// ✅ If only user_property filters, no deep filtering needed
 	if isUserPropertyOnly {
-		conn := db.GetClickhouse()
-		ctx := context.Background()
+		conn := db.GetMySQL()
 		var members []models.Member
+
 		for _, id := range nexoraIDs {
+
 			userPropertySql := ""
 			where := ""
 
@@ -79,7 +80,7 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 					req.Property,
 				)
 			} else {
-				userPropertySql = "'' AS property" // always return a column
+				userPropertySql = "'' AS property"
 			}
 
 			if req.Channel != "" {
@@ -93,25 +94,31 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 			}
 
 			q := fmt.Sprintf(`
-				SELECT %s
-				FROM customer_profiles
-				WHERE id in (select customer_profile_id from nexora_profiles where nexora_id = '%s') %s
-			`, userPropertySql, id, where)
+        SELECT %s
+        FROM customer_profiles
+        WHERE id IN (
+            SELECT customer_profile_id
+            FROM nexora_profiles
+            WHERE nexora_id = '%s'
+        ) %s
+        LIMIT 1
+    `, userPropertySql, id, where)
 
-			rows, err := conn.Query(ctx, q)
+			rows, err := conn.Query(q)
 			if err != nil {
 				return nil, err
 			}
-			defer rows.Close()
 
-			propertyValue := "" // default
+			propertyValue := ""
 
 			if rows.Next() {
-				err := rows.Scan(&propertyValue)
-				if err != nil {
+				if err := rows.Scan(&propertyValue); err != nil {
+					rows.Close()
 					return nil, err
 				}
 			}
+
+			rows.Close() // Don't defer inside loop
 
 			members = append(members, models.Member{
 				NexoraID: id,
