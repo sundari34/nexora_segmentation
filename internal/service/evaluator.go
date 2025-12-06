@@ -110,20 +110,22 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 			}
 
 			propertyValue := ""
-
+			count := 0
 			if rows.Next() {
 				if err := rows.Scan(&propertyValue); err != nil {
+					count++
 					rows.Close()
 					return nil, err
 				}
 			}
 
 			rows.Close() // Don't defer inside loop
-
-			members = append(members, models.Member{
-				NexoraID: id,
-				Property: propertyValue,
-			})
+			if count > 0 {
+				members = append(members, models.Member{
+					NexoraID: id,
+					Property: propertyValue,
+				})
+			}
 		}
 
 		return members, nil
