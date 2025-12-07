@@ -647,6 +647,7 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 		params = append(params, id)
 	}
 
+	fmt.Println(params)
 	conn := db.GetClickhouse()
 	ctx := context.Background()
 	fmt.Println(q)
