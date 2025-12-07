@@ -653,6 +653,8 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 	fmt.Println("((((((((q))))))))")
 	rows, err := conn.Query(ctx, q, params...)
 	if err != nil {
+		fmt.Println(err)
+		fmt.Println("((((((((((((((((err))))))))))))))))")
 		return nil, err
 	}
 	defer rows.Close()
