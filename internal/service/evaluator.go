@@ -624,7 +624,7 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 		q = fmt.Sprintf(`
 			SELECT DISTINCT nexora_id, client_id`+userPropertySql+
 			`FROM customer_profiles
-			WHERE nexora_id IN (%s)
+			WHERE id in (select customer_profile_id from nexora_profiles where nexora_id IN (%s))
 			  AND nexora_id IN (
 				SELECT nexora_id FROM events %s
 			  )
@@ -633,7 +633,7 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 		q = fmt.Sprintf(`
 			SELECT DISTINCT nexora_id, client_id`+userPropertySql+
 			`FROM customer_profiles
-			WHERE nexora_id IN (%s)
+			WHERE id in (select customer_profile_id from nexora_profiles where nexora_id IN (%s))
 			  AND nexora_id NOT IN (
 				SELECT nexora_id FROM events %s
 			  )
