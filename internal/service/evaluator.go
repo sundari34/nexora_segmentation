@@ -609,14 +609,14 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 	if req.Property != "" {
 		userPropertySql = fmt.Sprintf(", COALESCE(JSON_UNQUOTE(JSON_EXTRACT(user_properties, '$.%s')), 'default') AS property", req.Property)
 	}
-
+	customerProfileWhere := ""
 	if req.Channel != "" {
 		if req.Channel == "email" {
-			baseWhere += " AND email is not NULL AND email != ''"
+			customerProfileWhere += " AND email is not NULL AND email != ''"
 		} else if req.Channel == "mobile" || req.Channel == "sms" {
-			baseWhere += " AND mobile is not NULL AND mobile != ''"
+			customerProfileWhere += " AND mobile is not NULL AND mobile != ''"
 		} else if req.Channel == "push" || req.Channel == "web_push" {
-			baseWhere += " AND id in (select external_user_id from notification_tokens where token is not null and token != '')"
+			customerProfileWhere += " AND id in (select external_user_id from notification_tokens where token is not null and token != '')"
 		}
 	}
 
@@ -627,7 +627,7 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 			WHERE id in (select customer_profile_id from nexora_profiles where nexora_id IN (%s))
 			  AND nexora_id IN (
 				SELECT nexora_id FROM events %s
-			  )
+			  )`+customerProfileWhere+`
 		`, inPh, baseWhere)
 	} else if cond == "has_not_performed" {
 		q = fmt.Sprintf(`
@@ -636,16 +636,16 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 			WHERE id in (select customer_profile_id from nexora_profiles where nexora_id IN (%s))
 			  AND nexora_id NOT IN (
 				SELECT nexora_id FROM events %s
-			  )
+			  )`+customerProfileWhere+`
 		`, inPh, baseWhere)
 	} else {
 		return nil, fmt.Errorf("unsupported condition: %s", cond)
 	}
 	params := []any{eventCategory, eventName}
 	params = append(params, timeParams...)
-	for _, id := range nexoraIDs {
-		params = append(params, id)
-	}
+	// for _, id := range nexoraIDs {
+	// 	params = append(params, id)
+	// }
 
 	fmt.Println(params)
 	fmt.Println("(((((((params)))))))")
