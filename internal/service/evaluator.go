@@ -605,68 +605,97 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 	fmt.Println(req)
 	fmt.Println("((((((((((((((((((((((req))))))))))))))))))))))")
 	// check user property
-	userPropertySql := ""
-	if req.Property != "" {
-		userPropertySql = fmt.Sprintf(", COALESCE(JSON_UNQUOTE(JSON_EXTRACT(user_properties, '$.%s')), 'default') AS property", req.Property)
-	}
-	customerProfileWhere := ""
-	if req.Channel != "" {
-		if req.Channel == "email" {
-			customerProfileWhere += " AND email is not NULL AND email != ''"
-		} else if req.Channel == "mobile" || req.Channel == "sms" {
-			customerProfileWhere += " AND mobile is not NULL AND mobile != ''"
-		} else if req.Channel == "push" || req.Channel == "web_push" {
-			customerProfileWhere += " AND id in (select external_user_id from notification_tokens where token is not null and token != '')"
-		}
-	}
 
 	if cond == "has_performed" {
-		q = fmt.Sprintf(`
-			SELECT DISTINCT nexora_id, client_id`+userPropertySql+
-			`FROM customer_profiles
-			WHERE id in (select customer_profile_id from nexora_profiles where nexora_id IN (%s))
-			  AND nexora_id IN (
-				SELECT nexora_id FROM events %s
-			  )`+customerProfileWhere+`
-		`, inPh, baseWhere)
+		q = `SELECT DISTINCT nexora_id, client_id FROM events` + baseWhere
 	} else if cond == "has_not_performed" {
 		q = fmt.Sprintf(`
-			SELECT DISTINCT nexora_id, client_id`+userPropertySql+
-			`FROM customer_profiles
-			WHERE id in (select customer_profile_id from nexora_profiles where nexora_id IN (%s))
+			SELECT DISTINCT nexora_id, client_id FROM events
+			WHERE nexora_id IN (%s)
 			  AND nexora_id NOT IN (
 				SELECT nexora_id FROM events %s
-			  )`+customerProfileWhere+`
+			  )
 		`, inPh, baseWhere)
 	} else {
 		return nil, fmt.Errorf("unsupported condition: %s", cond)
 	}
+
 	params := []any{eventCategory, eventName}
 	params = append(params, timeParams...)
-	// for _, id := range nexoraIDs {
-	// 	params = append(params, id)
-	// }
+	for _, id := range nexoraIDs {
+		params = append(params, id)
+	}
 
-	fmt.Println(params)
-	fmt.Println("(((((((params)))))))")
 	conn := db.GetClickhouse()
 	ctx := context.Background()
 	fmt.Println(q)
 	fmt.Println("((((((((q))))))))")
 	rows, err := conn.Query(ctx, q, params...)
 	if err != nil {
-		fmt.Println(err)
-		fmt.Println("((((((((((((((((err))))))))))))))))")
 		return nil, err
 	}
 	defer rows.Close()
 
 	var members []models.Member
+	mysqlConn := db.GetMySQL()
 	for rows.Next() {
 		var m models.Member
 		if err := rows.Scan(&m.NexoraID, &m.ClientID); err != nil {
 			return nil, err
 		}
+		// get the customer properties and check reachanilities here
+		userPropertySql := ""
+		where := ""
+
+		if req.Property != "" {
+			userPropertySql = fmt.Sprintf(
+				"COALESCE(JSON_UNQUOTE(JSON_EXTRACT(user_properties, '$.%s')), 'default') AS property",
+				req.Property,
+			)
+		} else {
+			userPropertySql = "'' AS property"
+		}
+
+		if req.Channel != "" {
+			if req.Channel == "email" {
+				where += " AND email IS NOT NULL AND email != ''"
+			} else if req.Channel == "mobile" || req.Channel == "sms" {
+				where += " AND mobile IS NOT NULL AND mobile != ''"
+			} else if req.Channel == "push" || req.Channel == "web_push" {
+				where += " AND id IN (SELECT external_user_id FROM notification_tokens WHERE token IS NOT NULL AND token != '')"
+			}
+		}
+
+		q := fmt.Sprintf(`
+			SELECT %s
+			FROM customer_profiles
+			WHERE id IN (
+				SELECT customer_profile_id
+				FROM nexora_profiles
+				WHERE nexora_id = '%s'
+			) %s
+			LIMIT 1
+		`, userPropertySql, m.NexoraID, where)
+
+		rows, err := mysqlConn.Query(q)
+		if err != nil {
+			return nil, err
+		}
+
+		propertyValue := ""
+		count := 0
+		if rows.Next() {
+			if err := rows.Scan(&propertyValue); err != nil {
+				count++
+				rows.Close()
+				return nil, err
+			}
+		}
+
+		if count > 0 {
+			m.Property = propertyValue
+		}
+		rows.Close() // Don't defer inside loop
 		members = append(members, m)
 	}
 	return members, rows.Err()
