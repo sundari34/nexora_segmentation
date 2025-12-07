@@ -621,7 +621,14 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 	}
 
 	if cond == "has_performed" {
-		q = `SELECT DISTINCT nexora_id, client_id` + userPropertySql + `FROM events` + baseWhere
+		q = fmt.Sprintf(`
+			SELECT DISTINCT nexora_id, client_id`+userPropertySql+
+			`FROM customer_profiles
+			WHERE nexora_id IN (%s)
+			  AND nexora_id IN (
+				SELECT nexora_id FROM events %s
+			  )
+		`, inPh, baseWhere)
 	} else if cond == "has_not_performed" {
 		q = fmt.Sprintf(`
 			SELECT DISTINCT nexora_id, client_id`+userPropertySql+
