@@ -115,8 +115,8 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 			fmt.Println(rows)
 			fmt.Println("((((rows))))")
 			if rows.Next() {
+				count++
 				if err := rows.Scan(&propertyValue); err != nil {
-					count++
 					rows.Close()
 					return nil, err
 				}
@@ -689,8 +689,8 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 		propertyValue := ""
 		count := 0
 		if rows.Next() {
+			count++
 			if err := rows.Scan(&propertyValue); err != nil {
-				count++
 				rows.Close()
 				return nil, err
 			}
