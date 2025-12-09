@@ -103,7 +103,8 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
         ) %s
         LIMIT 1
     `, userPropertySql, id, where)
-
+			fmt.Println(q)
+			fmt.Println("((((((((((((((((((((((((((((((((((q))))))))))))))))))))))))))))))))))")
 			rows, err := conn.Query(q)
 			if err != nil {
 				return nil, err
@@ -111,6 +112,8 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 
 			propertyValue := ""
 			count := 0
+			fmt.Println(rows)
+			fmt.Println("((((rows))))")
 			if rows.Next() {
 				if err := rows.Scan(&propertyValue); err != nil {
 					count++
@@ -118,7 +121,8 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 					return nil, err
 				}
 			}
-
+			fmt.Println(count)
+			fmt.Println("(((((count)))))")
 			rows.Close() // Don't defer inside loop
 			if count > 0 {
 				members = append(members, models.Member{
