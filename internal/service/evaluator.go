@@ -103,8 +103,6 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
         ) %s
         LIMIT 1
     `, userPropertySql, id, where)
-			fmt.Println(q)
-			fmt.Println("((((((((((((((((((((((((((((((((((q))))))))))))))))))))))))))))))))))")
 			rows, err := conn.Query(q)
 			if err != nil {
 				return nil, err
@@ -112,8 +110,6 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 
 			propertyValue := ""
 			count := 0
-			fmt.Println(rows)
-			fmt.Println("((((rows))))")
 			if rows.Next() {
 				count++
 				if err := rows.Scan(&propertyValue); err != nil {
@@ -121,8 +117,6 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 					return nil, err
 				}
 			}
-			fmt.Println(count)
-			fmt.Println("(((((count)))))")
 			rows.Close() // Don't defer inside loop
 			if count > 0 {
 				members = append(members, models.Member{
@@ -632,8 +626,6 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 
 	conn := db.GetClickhouse()
 	ctx := context.Background()
-	fmt.Println(q)
-	fmt.Println("((((((((q))))))))")
 	rows, err := conn.Query(ctx, q, params...)
 	if err != nil {
 		return nil, err
