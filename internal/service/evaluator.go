@@ -696,6 +696,10 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 		if count > 0 {
 			m.Property = propertyValue
 		}
+		fmt.Println(m)
+		fmt.Println(m.NexoraID)
+		fmt.Println(m.ClientID)
+		fmt.Println("((((((((((((((((((((((((((m))))))))))))))))))))))))))")
 		rows.Close() // Don't defer inside loop
 		members = append(members, m)
 	}
