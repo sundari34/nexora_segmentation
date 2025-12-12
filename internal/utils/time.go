@@ -183,7 +183,7 @@ func BuildUserPropertyQuery(upq *UserPropertyQueryLite) (string, []any, error) {
 			clauses = append(clauses, fmt.Sprintf("(%s IS NOT NULL AND %s != '')", fieldExpr, fieldExpr))
 			continue
 
-		case "isnull":
+		case "isnull", "null":
 			clauses = append(clauses, fmt.Sprintf("(%s IS NULL OR %s = '')", fieldExpr, fieldExpr))
 			continue
 
