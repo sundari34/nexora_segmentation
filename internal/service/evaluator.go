@@ -74,7 +74,8 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 
 	// ✅ If only user_property filters, no deep filtering needed
 	if isUserPropertyOnly {
-		conn := db.GetMySQL()
+		clientDBManager := db.NewClientDB()
+		mysqlTenantConn, _ := clientDBManager.GetMysqlDB(req.ClientID, req.ProjectID)
 		var members []models.Member
 
 		for _, id := range nexoraIDs {
@@ -111,7 +112,7 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
         ) %s
         LIMIT 1
     `, userPropertySql, id, where)
-			rows, err := conn.Query(q)
+			rows, err := mysqlTenantConn.Query(q)
 			if err != nil {
 				return nil, err
 			}
@@ -155,6 +156,9 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 	log.Printf("before loop")
 	fmt.Println(req)
 	fmt.Println("((((((((((((((((((((((((((((((((((req))))))))))))))))))))))----------------)))))))))))))")
+	clientDBManager := db.NewClientDB()
+	mysqlConn, _ := clientDBManager.GetMysqlDB(req.ClientID, req.ProjectID)
+	clickhouseConn, _ := clientDBManager.GetCHDB(req.ClientID, req.ProjectID)
 	for gi, group := range req.Groups {
 		log.Printf("entered loop")
 		log.Printf(" Group %v", group)
@@ -197,7 +201,6 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 					whereClause += fmt.Sprintf(" and nexora_id = %s", req.NexoraID)
 				}
 
-				mysqlConn := db.GetMySQL()
 				if mysqlConn == nil {
 					return nil, fmt.Errorf("mysql connection not initialized")
 				}
@@ -362,9 +365,8 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 		log.Printf("[ClickHouse] Prefilter Query: %s | Params: %+v %+v\n", q, params, havingParams)
 	}
 
-	conn := db.GetClickhouse()
 	ctx := context.Background()
-	rows, err := conn.Query(ctx, q, append(params, havingParams...)...)
+	rows, err := clickhouseConn.Query(ctx, q, append(params, havingParams...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -521,6 +523,10 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 		return nil, fmt.Errorf("no filters provided")
 	}
 
+	clientDBManager := db.NewClientDB()
+	mysqlConn, _ := clientDBManager.GetMysqlDB(req.ClientID, req.ProjectID)
+	clickhouseConn, _ := clientDBManager.GetCHDB(req.ClientID, req.ProjectID)
+
 	// Find the first event filter in the first group (or any group if you prefer)
 	var eventFilter *models.Filter
 	for gi := range req.Groups {
@@ -637,12 +643,11 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 		params = append(params, id)
 	}
 
-	conn := db.GetClickhouse()
 	ctx := context.Background()
 	fmt.Println(q)
 	fmt.Println(params...)
 	fmt.Println("((((((((((((((((((((((params...))))))))))))))))))))))")
-	rows, err := conn.Query(ctx, q, params...)
+	rows, err := clickhouseConn.Query(ctx, q, params...)
 	if err != nil {
 		return nil, err
 	}
@@ -651,7 +656,6 @@ func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member,
 	defer rows.Close()
 
 	var members []models.Member
-	mysqlConn := db.GetMySQL()
 	for rows.Next() {
 		var m models.Member
 		if err := rows.Scan(&m.NexoraID, &m.ClientID); err != nil {

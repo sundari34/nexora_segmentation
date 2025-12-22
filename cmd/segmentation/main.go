@@ -19,7 +19,7 @@ func main() {
 		fmt.Println("Warning: Could not load .env file. Falling back to environment variables or defaults.")
 	}
 
-	db.InitClickhouse()
+	// db.InitClickhouse()
 	db.InitMySQL()
 
 	// 2. Get the port from the environment variable named "PORT"

@@ -17,6 +17,8 @@ type SegmentPayload struct {
 	Property       string      `json:"property,omitempty"`
 	Channel        string      `json:"channel,omitempty"`
 	NexoraID       string      `json:"nexora_id,omitempty"`
+	ClientID       string      `json:"client_id,omitempty"`
+	ProjectID      string      `json:"project_id,omitempty"`
 }
 
 // NOTE: new top-level payload is an array of group-like objects.
