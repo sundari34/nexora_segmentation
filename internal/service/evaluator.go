@@ -77,7 +77,12 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 	// ✅ If only user_property filters, no deep filtering needed
 	if isUserPropertyOnly {
 		clientDBManager := db.NewClientDB()
-		mysqlTenantConn, _ := clientDBManager.GetMysqlDB(req.ClientID, req.ProjectID)
+		mysqlTenantConn, err := clientDBManager.GetMysqlDB(req.ClientID, req.ProjectID)
+		if err != nil {
+			log.Println(nexoraIDs)
+			fmt.Println(err)
+			fmt.Println("(((((((((err inside evalute tenant mysql)))))))))")
+		}
 		var members []models.Member
 
 		for _, id := range nexoraIDs {
@@ -116,6 +121,8 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
     `, userPropertySql, id, where)
 			rows, err := mysqlTenantConn.Query(q)
 			if err != nil {
+				fmt.Println(err)
+				fmt.Println("(((((((((((((((err inside property getting)))))))))))))))")
 				return nil, err
 			}
 
