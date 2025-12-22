@@ -36,18 +36,26 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 	// 1️⃣ Prefilter candidates based on first filter
 	log.Printf("here")
 	log.Printf("%v", req)
+	fmt.Println(len(req.Groups))
+	fmt.Println("(((((len(req.Groups))))))")
 
-	nexoraIDs, err := prefilterCandidates(req)
+	var nexoraIDs []string
+	if len(req.Groups) == 0 {
+		nexoraIDs = []string{req.NexoraID}
+	} else {
+		fmt.Println("-----------------------")
+		nexoraIDs, err := prefilterCandidates(req)
 
-	if err != nil {
-		log.Printf("Error in processing the payload, some conditions in the properties are not handled : %+v", err)
-		return nil, err
-	}
+		if err != nil {
+			log.Printf("Error in processing the payload, some conditions in the properties are not handled : %+v", err)
+			return nil, err
+		}
 
-	log.Println(len(nexoraIDs))
+		log.Println(len(nexoraIDs))
 
-	if len(nexoraIDs) == 0 {
-		return []models.Member{}, nil
+		if len(nexoraIDs) == 0 {
+			return []models.Member{}, nil
+		}
 	}
 
 	// ✅ Check if this is a user_property-only segment
@@ -182,6 +190,11 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 				whereClause, params, err := utils.BuildUserPropertyQuery(&upqLite)
 				if err != nil {
 					return nil, fmt.Errorf("error building user property query: %v", err)
+				}
+
+				// add nexora_id in condition
+				if req.NexoraID != "" {
+					whereClause += fmt.Sprintf(" and nexora_id = %s", req.NexoraID)
 				}
 
 				mysqlConn := db.GetMySQL()

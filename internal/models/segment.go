@@ -16,6 +16,7 @@ type SegmentPayload struct {
 	Groups         []RuleGroup `json:"groups,omitempty"`
 	Property       string      `json:"property,omitempty"`
 	Channel        string      `json:"channel,omitempty"`
+	NexoraID       string      `json:"nexora_id,omitempty"`
 }
 
 // NOTE: new top-level payload is an array of group-like objects.
