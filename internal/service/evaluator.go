@@ -40,11 +40,12 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 	fmt.Println("(((((len(req.Groups))))))")
 
 	var nexoraIDs []string
+	var err error
 	if len(req.Groups) == 0 {
 		nexoraIDs = []string{req.NexoraID}
 	} else {
 		fmt.Println("-----------------------")
-		nexoraIDs, err := prefilterCandidates(req)
+		nexoraIDs, err = prefilterCandidates(req)
 
 		if err != nil {
 			log.Printf("Error in processing the payload, some conditions in the properties are not handled : %+v", err)
