@@ -51,10 +51,6 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 			return nil, err
 		}
 
-		log.Println(len(nexoraIDs))
-		log.Println(nexoraIDs)
-		log.Println("((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((nexoraIDs))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))")
-
 		if len(nexoraIDs) == 0 {
 			return []models.Member{}, nil
 		}
@@ -86,7 +82,9 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 			fmt.Println("(((((((((err inside evalute tenant mysql)))))))))")
 		}
 		var members []models.Member
-
+		log.Println(len(nexoraIDs))
+		log.Println(nexoraIDs)
+		log.Println("(((((((((((((nexoraIDs)))))))))))))")
 		for _, id := range nexoraIDs {
 
 			userPropertySql := ""
