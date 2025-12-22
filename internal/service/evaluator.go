@@ -169,7 +169,7 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 	mysqlConn, err := clientDBManager.GetMysqlDB(req.ClientID, req.ProjectID)
 	clickhouseConn, err := clientDBManager.GetCHDB(req.ClientID, req.ProjectID)
 	fmt.Println(err)
-	fmt.Println("((((((((((((((err))))))))))))))")
+	fmt.Println("((((((((((((((err ------------------------------ err))))))))))))))")
 	for gi, group := range req.Groups {
 		log.Printf("entered loop")
 		log.Printf(" Group %v", group)
@@ -379,10 +379,12 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 	ctx := context.Background()
 	rows, err := clickhouseConn.Query(ctx, q, append(params, havingParams...)...)
 	if err != nil {
+		fmt.Println(err)
+		fmt.Println("((((((((err ins clickhouse))))))))")
 		return nil, err
 	}
 	defer rows.Close()
-
+	fmt.Println(rows)
 	var out []string
 	for rows.Next() {
 		var id string
@@ -391,6 +393,7 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 		}
 		out = append(out, id)
 	}
+	fmt.Println(out)
 	return out, rows.Err()
 }
 
