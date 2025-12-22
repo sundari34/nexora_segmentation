@@ -75,6 +75,8 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 	}
 
 	// ✅ If only user_property filters, no deep filtering needed
+	fmt.Println(isUserPropertyOnly)
+	fmt.Println("((((isUserPropertyOnly))))")
 	if isUserPropertyOnly {
 		clientDBManager := db.NewClientDB()
 		mysqlTenantConn, err := clientDBManager.GetMysqlDB(req.ClientID, req.ProjectID)
@@ -119,13 +121,16 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
         ) %s
         LIMIT 1
     `, userPropertySql, id, where)
+			fmt.Println(q)
+			fmt.Println("((((q))))")
 			rows, err := mysqlTenantConn.Query(q)
 			if err != nil {
 				fmt.Println(err)
 				fmt.Println("(((((((((((((((err inside property getting)))))))))))))))")
 				return nil, err
 			}
-
+			fmt.Println(rows)
+			fmt.Println("(((((rows)))))")
 			propertyValue := ""
 			count := 0
 			if rows.Next() {
@@ -136,6 +141,8 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 				}
 			}
 			rows.Close() // Don't defer inside loop
+			fmt.Println(count)
+			fmt.Println("(((((count)))))")
 			if count > 0 {
 				members = append(members, models.Member{
 					NexoraID: id,
