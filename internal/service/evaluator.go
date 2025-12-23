@@ -391,12 +391,15 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 	}
 	defer rows.Close()
 	fmt.Println(rows)
+	fmt.Println("((((((rows))))))")
 	var out []string
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
+		fmt.Println(id)
+		fmt.Println("((((id))))")
 		out = append(out, id)
 	}
 	fmt.Println(out)
