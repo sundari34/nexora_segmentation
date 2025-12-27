@@ -56,7 +56,8 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 			return []models.Member{}, nil
 		}
 	}
-
+	fmt.Println(nexoraIDs)
+	fmt.Println("(((((nexoraIDs)))))")
 	// ✅ Check if this is a user_property-only segment
 	isUserPropertyOnly := true
 	for _, group := range req.Groups {
