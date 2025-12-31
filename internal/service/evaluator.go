@@ -150,7 +150,8 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 				})
 			}
 		}
-
+		fmt.Println(members)
+		fmt.Println("(((members)))")
 		return members, nil
 	}
 
