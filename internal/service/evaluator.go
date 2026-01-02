@@ -354,23 +354,9 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 	}
 
 	fmt.Println(req)
-	fmt.Println("((((((((((((((((((((((req))))))))))))))))))))))")
-	// check user property
-	// userPropertySql := ""
-	// if req.Property != "" {
-	// 	userPropertySql = fmt.Sprintf(", COALESCE(JSON_UNQUOTE(JSON_EXTRACT(user_properties, '$.%s')), 'default') AS property", req.Property)
-	// }
-
-	// if req.Channel != "" {
-	// 	if req.Channel == "email" {
-	// 		finalWhere += " AND email is not NULL AND email != ''"
-	// 	} else if req.Channel == "mobile" || req.Channel == "sms" {
-	// 		finalWhere += " AND mobile is not NULL AND mobile != ''"
-	// 	} else if req.Channel == "push" || req.Channel == "web_push" {
-	// 		finalWhere += " AND id in (select external_user_id from notification_tokens where token is not null and token != '')"
-	// 	}
-	// }
-
+	fmt.Println("((((((((((((((((((((((req)))))))))))))))))))))))")
+	fmt.Println(finalWhere)
+	fmt.Println("((((((((((finalWhere))))))))))")
 	q := fmt.Sprintf(`
 		SELECT nexora_id 
 		FROM event_daily
