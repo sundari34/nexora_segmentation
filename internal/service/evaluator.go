@@ -178,6 +178,8 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 	clickhouseConn, err := clientDBManager.GetCHDB(req.ClientID, req.ProjectID)
 	fmt.Println(err)
 	fmt.Println("((((((((((((((err ------------------------------ err))))))))))))))")
+	fmt.Println(req.Groups)
+	fmt.Println("((((req.Groups))))")
 	for gi, group := range req.Groups {
 		log.Printf("entered loop")
 		log.Printf(" Group %v", group)
