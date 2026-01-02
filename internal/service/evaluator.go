@@ -355,12 +355,22 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 		finalHaving = "HAVING " + strings.Join(havingClauses, " AND ")
 	}
 
-	fmt.Println(req)
-	fmt.Println("((((((((((((((((((((((req)))))))))))))))))))))))")
-	fmt.Println(finalWhere)
-	fmt.Println("((((((((((finalWhere))))))))))")
-	fmt.Println(finalHaving)
-	fmt.Println("(((((finalHaving)))))")
+	// send nexora ids if it only contains nexora_Id not event conditions suitable for csv uploaded peoples
+	onlyNexoraFilter :=
+		len(whereClauses) == 1 &&
+			strings.Contains(whereClauses[0], "nexora_id IN") &&
+			len(havingClauses) == 0
+
+	if onlyNexoraFilter {
+		fmt.Println("Only nexora_id filter found, skipping query")
+
+		var out []string
+		for _, id := range params {
+			out = append(out, fmt.Sprintf("%v", id))
+		}
+		return out, nil
+	}
+
 	q := fmt.Sprintf(`
 		SELECT nexora_id 
 		FROM event_daily
@@ -368,8 +378,7 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 		GROUP BY nexora_id
 		%s
 	`, finalWhere, finalHaving)
-	fmt.Println(q)
-	fmt.Println("Final Query ------------------------------------")
+
 	if db.IsQueryLoggingEnabled() {
 		log.Printf("[ClickHouse] Prefilter Query: %s | Params: %+v %+v\n", q, params, havingParams)
 	}
