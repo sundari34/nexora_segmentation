@@ -357,6 +357,8 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 	fmt.Println("((((((((((((((((((((((req)))))))))))))))))))))))")
 	fmt.Println(finalWhere)
 	fmt.Println("((((((((((finalWhere))))))))))")
+	fmt.Println(finalHaving)
+	fmt.Println("(((((finalHaving)))))")
 	q := fmt.Sprintf(`
 		SELECT nexora_id 
 		FROM event_daily
