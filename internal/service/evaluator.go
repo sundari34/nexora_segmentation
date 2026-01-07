@@ -342,12 +342,14 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 			}
 		}
 		// combine filters within group
-		whereClauses = append(whereClauses, "("+strings.Join(groupWhere, " "+strings.ToUpper(group.MatchMode)+" ")+")")
-		if len(groupHaving) > 0 {
-			havingClauses = append(havingClauses, "("+strings.Join(groupHaving, " AND ")+")")
-			havingParams = append(havingParams, groupHavingParams...)
+		if len(groupWhere) > 0 {
+			whereClauses = append(whereClauses, "("+strings.Join(groupWhere, " "+strings.ToUpper(group.MatchMode)+" ")+")")
+			if len(groupHaving) > 0 {
+				havingClauses = append(havingClauses, "("+strings.Join(groupHaving, " AND ")+")")
+				havingParams = append(havingParams, groupHavingParams...)
+			}
+			params = append(params, groupParams...)
 		}
-		params = append(params, groupParams...)
 	}
 
 	finalWhere := strings.Join(whereClauses, " AND ")
