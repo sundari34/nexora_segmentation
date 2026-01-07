@@ -354,6 +354,9 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 
 	fmt.Println(whereClauses)
 	fmt.Println("((((((whereClauses))))))")
+	if len(whereClauses) < 1 {
+		return []string{}, nil
+	}
 	finalWhere := strings.Join(whereClauses, " AND ")
 	finalHaving := ""
 	if len(havingClauses) > 0 {
