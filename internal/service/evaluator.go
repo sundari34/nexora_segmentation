@@ -331,7 +331,8 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 			}
 			groupHaving = append(groupHaving, havingClause)
 		}
-
+		fmt.Println(userPropertyIDs)
+		fmt.Println("((((userPropertyIDs))))")
 		if len(userPropertyIDs) > 0 {
 			placeholder := strings.Repeat("?,", len(userPropertyIDs))
 			placeholder = strings.TrimSuffix(placeholder, ",")
