@@ -360,7 +360,9 @@ func prefilterCandidates(req models.SegmentPayload) ([]string, error) {
 		len(whereClauses) == 1 &&
 			strings.Contains(whereClauses[0], "nexora_id IN") &&
 			len(havingClauses) == 0
-
+	fmt.Println(onlyNexoraFilter)
+	fmt.Println(whereClauses)
+	fmt.Println("(((((whereClauses)))))")
 	if onlyNexoraFilter {
 		fmt.Println("Only nexora_id filter found, skipping query")
 
