@@ -193,8 +193,8 @@ func fetchMysqlDBConfigFromMasterTable(clientID, projectID string) (*MySQLConfig
 	err = masterDB.QueryRow(`
 		SELECT host, database_name, user, password
 		FROM master_database_credentials
-		WHERE client_id=? AND project_id=? AND driver = ?`,
-		clientID, projectID, "mysql").
+		WHERE client_id=? AND driver = ?`,
+		clientID, "mysql").
 		Scan(&dbcfg.Host, &dbcfg.Database, &dbcfg.User, &dbcfg.Password)
 	if err != nil {
 		return nil, err
@@ -225,8 +225,8 @@ func fetchClickhouseDBConfigFromMasterTable(clientID, projectID string) (*CHConf
 	err = masterDB.QueryRow(`
 		SELECT host, database_name, user, password, port
 		FROM master_database_credentials
-		WHERE client_id=? AND project_id=? AND driver = ?`,
-		clientID, projectID, "clickhouse").
+		WHERE client_id=? AND driver = ?`,
+		clientID, "clickhouse").
 		Scan(&dbcfg.Host, &dbcfg.Database, &dbcfg.User, &dbcfg.Password, &dbcfg.Port)
 	if err != nil {
 		return nil, err
