@@ -4,245 +4,156 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
+
 	"sync"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/joho/godotenv"
 )
-
-/* ============================================================
-   CONFIG
-============================================================ */
-
-const (
-	mysqlMaxOpen    = 10
-	mysqlMaxIdle    = 5
-	mysqlConnLife   = time.Hour
-	tenantTTL       = 30 * time.Minute
-	cleanupInterval = 5 * time.Minute
-)
-
-/* ============================================================
-   TYPES
-============================================================ */
-
-type pooledMySQL struct {
-	db       *sql.DB
-	lastUsed time.Time
-}
-
-type pooledCH struct {
-	conn     clickhouse.Conn
-	lastUsed time.Time
-}
 
 type ClientDB struct {
 	mu         sync.RWMutex
-	mysqlPools map[string]*pooledMySQL
-	chPools    map[string]*pooledCH
+	mysqlPools map[string]*sql.DB
+	chPools    map[string]clickhouse.Conn
 }
 
 var (
-	clientDB     *ClientDB
-	clientDBOnce sync.Once
-
-	masterDB   *sql.DB
-	masterOnce sync.Once
+	clientDBInstance *ClientDB
+	once             sync.Once
 )
 
-/* ============================================================
-   SINGLETON INIT
-============================================================ */
-
+// ✅ Create singleton ClientDB instance
 func NewClientDB() *ClientDB {
-	clientDBOnce.Do(func() {
-		clientDB = &ClientDB{
-			mysqlPools: make(map[string]*pooledMySQL),
-			chPools:    make(map[string]*pooledCH),
+	once.Do(func() {
+		clientDBInstance = &ClientDB{
+			mysqlPools: make(map[string]*sql.DB),
+			chPools:    make(map[string]clickhouse.Conn),
 		}
-		go clientDB.cleanupLoop()
 	})
-	return clientDB
+	return clientDBInstance
 }
-
-/* ============================================================
-   MASTER DB (SINGLE POOL)
-============================================================ */
-
-func getMasterDB() (*sql.DB, error) {
-	var err error
-
-	masterOnce.Do(func() {
-		dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true",
-			os.Getenv("MYSQL_USER"),
-			os.Getenv("MYSQL_PASS"),
-			os.Getenv("MYSQL_HOST"),
-			os.Getenv("MYSQL_DB"),
-		)
-
-		masterDB, err = sql.Open("mysql", dsn)
-		if err != nil {
-			return
-		}
-
-		masterDB.SetMaxOpenConns(10)
-		masterDB.SetMaxIdleConns(5)
-		masterDB.SetConnMaxLifetime(time.Hour)
-
-		err = masterDB.Ping()
-	})
-
-	return masterDB, err
-}
-
-/* ============================================================
-   MYSQL TENANT POOL
-============================================================ */
 
 func (c *ClientDB) GetMysqlDB(clientID, projectID string) (*sql.DB, error) {
-	key := clientID + "_" + projectID
+	key := fmt.Sprintf("%s_%s", clientID, projectID)
 
+	// ✅ Return cached connection if exists
 	c.mu.RLock()
-	if pool, ok := c.mysqlPools[key]; ok {
-		pool.lastUsed = time.Now()
-		c.mu.RUnlock()
-		return pool.db, nil
-	}
+	db, exists := c.mysqlPools[key]
 	c.mu.RUnlock()
+	if exists {
+		if err := db.Ping(); err == nil {
+			return db, nil
+		}
+		// Remove broken connection
+		c.mu.Lock()
+		delete(c.mysqlPools, key)
+		c.mu.Unlock()
+	}
 
-	cfg, err := fetchMysqlDBConfig(clientID, projectID)
+	dbConfig, err := fetchMysqlDBConfigFromMasterTable(clientID, projectID)
 	if err != nil {
 		return nil, err
 	}
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
-		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database,
-	)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true",
+		dbConfig.User, dbConfig.Password, dbConfig.Host, dbConfig.Database)
 
-	db, err := sql.Open("mysql", dsn)
+	newDB, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(mysqlMaxOpen)
-	db.SetMaxIdleConns(mysqlMaxIdle)
-	db.SetConnMaxLifetime(mysqlConnLife)
+	newDB.SetMaxOpenConns(10)
+	newDB.SetMaxIdleConns(5)
+	newDB.SetConnMaxLifetime(time.Hour)
 
-	if err := db.Ping(); err != nil {
-		return nil, err
+	if err := newDB.Ping(); err != nil {
+		return nil, fmt.Errorf("MySQL ping failed: %w", err)
 	}
 
 	c.mu.Lock()
-	c.mysqlPools[key] = &pooledMySQL{db: db, lastUsed: time.Now()}
+	c.mysqlPools[key] = newDB
 	c.mu.Unlock()
 
-	return db, nil
+	return newDB, nil
 }
 
-/* ============================================================
-   CLICKHOUSE TENANT POOL
-============================================================ */
-
 func (c *ClientDB) GetCHDB(clientID, projectID string) (clickhouse.Conn, error) {
-	key := clientID + "_" + projectID
+	key := fmt.Sprintf("%s_%s", clientID, projectID)
 
+	// ✅ Return cached & live connection if available
 	c.mu.RLock()
-	if pool, ok := c.chPools[key]; ok {
-		pool.lastUsed = time.Now()
-		c.mu.RUnlock()
-		return pool.conn, nil
-	}
+	db, exists := c.chPools[key]
 	c.mu.RUnlock()
+	if exists {
+		if err := db.Ping(context.Background()); err == nil {
+			return db, nil
+		}
+		// Remove broken connection
+		c.mu.Lock()
+		delete(c.chPools, key)
+		c.mu.Unlock()
+	}
 
-	cfg, err := fetchClickhouseDBConfig(clientID, projectID)
+	dbConfig, err := fetchClickhouseDBConfigFromMasterTable(clientID, projectID)
 	if err != nil {
 		return nil, err
 	}
 
 	opts := &clickhouse.Options{
-		Addr: []string{fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)},
+		Addr: []string{fmt.Sprintf("%s:%d", dbConfig.Host, 9000)},
 		Auth: clickhouse.Auth{
-			Database: cfg.Database,
-			Username: cfg.User,
-			Password: cfg.Password,
+			Database: dbConfig.Database,
+			Username: dbConfig.User,
+			Password: dbConfig.Password,
 		},
-		DialTimeout:     10 * time.Second,
-		MaxOpenConns:    5,
-		MaxIdleConns:    2,
-		ConnMaxLifetime: time.Hour,
+		Settings: map[string]interface{}{
+			"max_execution_time": 60,
+		},
+		DialTimeout:      10 * time.Second,
+		MaxOpenConns:     10,
+		MaxIdleConns:     5,
+		ConnMaxLifetime:  time.Hour,
+		ConnOpenStrategy: clickhouse.ConnOpenInOrder,
 	}
 
-	conn, err := clickhouse.Open(opts)
+	chConn, err := clickhouse.Open(opts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open ClickHouse connection: %w", err)
 	}
 
-	if err := conn.Ping(context.Background()); err != nil {
-		return nil, err
+	if err := chConn.Ping(context.Background()); err != nil {
+		return nil, fmt.Errorf("ClickHouse ping failed: %w", err)
 	}
 
 	c.mu.Lock()
-	c.chPools[key] = &pooledCH{conn: conn, lastUsed: time.Now()}
+	c.chPools[key] = chConn
 	c.mu.Unlock()
 
-	return conn, nil
+	return chConn, nil
 }
 
-/* ============================================================
-   CLEANUP LOOP (TTL EVICTION)
-============================================================ */
-
-func (c *ClientDB) cleanupLoop() {
-	ticker := time.NewTicker(cleanupInterval)
-	for range ticker.C {
-		now := time.Now()
-
-		c.mu.Lock()
-		for k, v := range c.mysqlPools {
-			if now.Sub(v.lastUsed) > tenantTTL {
-				v.db.Close()
-				delete(c.mysqlPools, k)
-			}
-		}
-		for k, v := range c.chPools {
-			if now.Sub(v.lastUsed) > tenantTTL {
-				v.conn.Close()
-				delete(c.chPools, k)
-			}
-		}
-		c.mu.Unlock()
-	}
-}
-
-/* ============================================================
-   SHUTDOWN
-============================================================ */
-
+// ✅ Graceful shutdown for all pools
 func (c *ClientDB) CloseAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for k, v := range c.mysqlPools {
-		v.db.Close()
-		delete(c.mysqlPools, k)
+	for key, conn := range c.mysqlPools {
+		conn.Close()
+		delete(c.mysqlPools, key)
 	}
 
-	for k, v := range c.chPools {
-		v.conn.Close()
-		delete(c.chPools, k)
-	}
-
-	if masterDB != nil {
-		masterDB.Close()
+	for key, conn := range c.chPools {
+		conn.Close()
+		delete(c.chPools, key)
 	}
 }
 
-/* ============================================================
-   CONFIG FETCHERS
-============================================================ */
-
+// MySQL DB config
 type MySQLConfig struct {
 	Host     string
 	Port     int
@@ -251,6 +162,7 @@ type MySQLConfig struct {
 	Password string
 }
 
+// ClickHouse DB config
 type CHConfig struct {
 	Host     string
 	Port     int
@@ -259,74 +171,101 @@ type CHConfig struct {
 	Password string
 }
 
-func fetchMysqlDBConfig(clientID, projectID string) (*MySQLConfig, error) {
-	db, err := getMasterDB()
+func fetchMysqlDBConfigFromMasterTable(clientID, projectID string) (*MySQLConfig, error) {
+	if err := godotenv.Load(); err != nil {
+		log.Println("⚠️ Could not load .env file, continuing...")
+	}
+	masterDSN := fmt.Sprintf(
+		"%s:%s@tcp(%s)/%s?parseTime=true",
+		os.Getenv("MYSQL_USER"),
+		os.Getenv("MYSQL_PASS"),
+		os.Getenv("MYSQL_HOST"),
+		os.Getenv("MYSQL_DB"),
+	)
+
+	masterDB, err := sql.Open("mysql", masterDSN)
+	if err != nil {
+		return nil, err
+	}
+	defer masterDB.Close()
+
+	var dbcfg MySQLConfig
+	err = masterDB.QueryRow(`
+		SELECT host, database_name, user, password
+		FROM master_database_credentials
+		WHERE client_id=? AND driver = ?`,
+		clientID, "mysql").
+		Scan(&dbcfg.Host, &dbcfg.Database, &dbcfg.User, &dbcfg.Password)
 	if err != nil {
 		return nil, err
 	}
 
-	var cfg MySQLConfig
-	err = db.QueryRow(`
-		SELECT host, port, database_name, user, password
-		FROM master_database_credentials
-		WHERE client_id=? AND project_id=? AND driver='mysql'
-	`, clientID, projectID).
-		Scan(&cfg.Host, &cfg.Port, &cfg.Database, &cfg.User, &cfg.Password)
-
-	return &cfg, err
+	return &dbcfg, nil
 }
 
-func fetchClickhouseDBConfig(clientID, projectID string) (*CHConfig, error) {
-	db, err := getMasterDB()
+func fetchClickhouseDBConfigFromMasterTable(clientID, projectID string) (*CHConfig, error) {
+	if err := godotenv.Load(); err != nil {
+		log.Println("⚠️ Could not load .env file, continuing...")
+	}
+	masterDSN := fmt.Sprintf(
+		"%s:%s@tcp(%s)/%s?parseTime=true",
+		os.Getenv("MYSQL_USER"),
+		os.Getenv("MYSQL_PASS"),
+		os.Getenv("MYSQL_HOST"),
+		os.Getenv("MYSQL_DB"),
+	)
+
+	masterDB, err := sql.Open("mysql", masterDSN)
+	if err != nil {
+		return nil, err
+	}
+	defer masterDB.Close()
+
+	var dbcfg CHConfig
+	err = masterDB.QueryRow(`
+		SELECT host, database_name, user, password, port
+		FROM master_database_credentials
+		WHERE client_id=? AND driver = ?`,
+		clientID, "clickhouse").
+		Scan(&dbcfg.Host, &dbcfg.Database, &dbcfg.User, &dbcfg.Password, &dbcfg.Port)
 	if err != nil {
 		return nil, err
 	}
 
-	var cfg CHConfig
-	err = db.QueryRow(`
-		SELECT host, port, database_name, user, password
-		FROM master_database_credentials
-		WHERE client_id=? AND project_id=? AND driver='clickhouse'
-	`, clientID, projectID).
-		Scan(&cfg.Host, &cfg.Port, &cfg.Database, &cfg.User, &cfg.Password)
-
-	return &cfg, err
+	return &dbcfg, nil
 }
-
-/* ============================================================
-   UTIL
-============================================================ */
 
 func RowsToMap(rows *sql.Rows) ([]map[string]interface{}, error) {
 	defer rows.Close()
 
-	cols, err := rows.Columns()
+	columns, err := rows.Columns()
 	if err != nil {
 		return nil, err
 	}
 
-	var out []map[string]interface{}
+	var results []map[string]interface{}
 
 	for rows.Next() {
-		vals := make([]interface{}, len(cols))
-		ptrs := make([]interface{}, len(cols))
-		for i := range vals {
-			ptrs[i] = &vals[i]
+		values := make([]interface{}, len(columns))
+		pointers := make([]interface{}, len(columns))
+		for i := range values {
+			pointers[i] = &values[i]
 		}
 
-		if err := rows.Scan(ptrs...); err != nil {
+		if err := rows.Scan(pointers...); err != nil {
 			return nil, err
 		}
 
-		row := make(map[string]interface{})
-		for i, col := range cols {
-			if b, ok := vals[i].([]byte); ok {
-				row[col] = string(b)
+		rowMap := make(map[string]interface{})
+		for i, col := range columns {
+			val := values[i]
+			if b, ok := val.([]byte); ok {
+				rowMap[col] = string(b)
 			} else {
-				row[col] = vals[i]
+				rowMap[col] = val
 			}
 		}
-		out = append(out, row)
+		results = append(results, rowMap)
 	}
-	return out, nil
+	return results, nil
 }
