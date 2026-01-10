@@ -8,6 +8,7 @@ import (
 	"github.com/joho/godotenv"
 	// Assuming these imports are correct for your project structure
 	"github.com/nexora/nexora_segmentation/internal/api"
+	"github.com/nexora/nexora_segmentation/internal/db"
 )
 
 func main() {
@@ -19,7 +20,7 @@ func main() {
 	}
 
 	// db.InitClickhouse()
-	// db.InitMySQL()
+	db.InitMySQL()
 
 	// 2. Get the port from the environment variable named "PORT"
 	portStr := os.Getenv("PORT")
