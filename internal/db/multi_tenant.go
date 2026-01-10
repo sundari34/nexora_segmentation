@@ -299,8 +299,8 @@ func fetchMysqlDBConfig(clientID, projectID string) (*MySQLConfig, error) {
 	err = db.QueryRow(`
 		SELECT host, port, database_name, user, password
 		FROM master_database_credentials
-		WHERE client_id=? AND project_id=? AND driver='mysql'
-	`, clientID, projectID).
+		WHERE client_id=? AND driver='mysql'
+	`, clientID).
 		Scan(&cfg.Host, &cfg.Port, &cfg.Database, &cfg.User, &cfg.Password)
 
 	return &cfg, err
@@ -316,8 +316,8 @@ func fetchClickhouseDBConfig(clientID, projectID string) (*CHConfig, error) {
 	err = db.QueryRow(`
 		SELECT host, port, database_name, user, password
 		FROM master_database_credentials
-		WHERE client_id=? AND project_id=? AND driver='clickhouse'
-	`, clientID, projectID).
+		WHERE client_id=? AND driver='clickhouse'
+	`, clientID).
 		Scan(&cfg.Host, &cfg.Port, &cfg.Database, &cfg.User, &cfg.Password)
 
 	return &cfg, err
