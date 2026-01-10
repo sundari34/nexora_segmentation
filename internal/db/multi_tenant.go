@@ -44,18 +44,14 @@ type ClientDB struct {
 	chPools    map[string]*pooledCH
 }
 
+/* ============================================================
+   SINGLETON CLIENT DB
+============================================================ */
+
 var (
 	clientDB     *ClientDB
 	clientDBOnce sync.Once
-
-	masterDB   *sql.DB
-	masterOnce sync.Once
-	masterMu   sync.Mutex
 )
-
-/* ============================================================
-   SINGLETON INIT
-============================================================ */
 
 func NewClientDB() *ClientDB {
 	clientDBOnce.Do(func() {
@@ -69,28 +65,38 @@ func NewClientDB() *ClientDB {
 }
 
 /* ============================================================
-   MASTER DB (SINGLE POOL)
+   MASTER MYSQL (RETRY-SAFE, NO sync.Once)
 ============================================================ */
+
+var (
+	masterDB *sql.DB
+	masterMu sync.Mutex
+)
 
 func getMasterDB() (*sql.DB, error) {
 	masterMu.Lock()
 	defer masterMu.Unlock()
 
-	// Already initialized and alive
+	// Reuse healthy connection
 	if masterDB != nil {
 		if err := masterDB.Ping(); err == nil {
 			return masterDB, nil
 		}
-		// broken connection
 		masterDB.Close()
 		masterDB = nil
 	}
 
+	host := os.Getenv("MYSQL_HOST")
+	user := os.Getenv("MYSQL_USER")
+	pass := os.Getenv("MYSQL_PASS")
+	dbname := os.Getenv("MYSQL_DB")
+
+	if host == "" || user == "" || dbname == "" {
+		return nil, fmt.Errorf("MYSQL env vars not set")
+	}
+
 	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true",
-		os.Getenv("MYSQL_USER"),
-		os.Getenv("MYSQL_PASS"),
-		os.Getenv("MYSQL_HOST"),
-		os.Getenv("MYSQL_DB"),
+		user, pass, host, dbname,
 	)
 
 	db, err := sql.Open("mysql", dsn)
@@ -119,12 +125,15 @@ func (c *ClientDB) GetMysqlDB(clientID, projectID string) (*sql.DB, error) {
 	key := clientID + "_" + projectID
 
 	c.mu.RLock()
-	if pool, ok := c.mysqlPools[key]; ok {
+	pool, ok := c.mysqlPools[key]
+	c.mu.RUnlock()
+
+	if ok {
+		c.mu.Lock()
 		pool.lastUsed = time.Now()
-		c.mu.RUnlock()
+		c.mu.Unlock()
 		return pool.db, nil
 	}
-	c.mu.RUnlock()
 
 	cfg, err := fetchMysqlDBConfig(clientID, projectID)
 	if err != nil {
@@ -145,6 +154,7 @@ func (c *ClientDB) GetMysqlDB(clientID, projectID string) (*sql.DB, error) {
 	db.SetConnMaxLifetime(mysqlConnLife)
 
 	if err := db.Ping(); err != nil {
+		db.Close()
 		return nil, err
 	}
 
@@ -163,12 +173,15 @@ func (c *ClientDB) GetCHDB(clientID, projectID string) (clickhouse.Conn, error) 
 	key := clientID + "_" + projectID
 
 	c.mu.RLock()
-	if pool, ok := c.chPools[key]; ok {
+	pool, ok := c.chPools[key]
+	c.mu.RUnlock()
+
+	if ok {
+		c.mu.Lock()
 		pool.lastUsed = time.Now()
-		c.mu.RUnlock()
+		c.mu.Unlock()
 		return pool.conn, nil
 	}
-	c.mu.RUnlock()
 
 	cfg, err := fetchClickhouseDBConfig(clientID, projectID)
 	if err != nil {
@@ -194,6 +207,7 @@ func (c *ClientDB) GetCHDB(clientID, projectID string) (clickhouse.Conn, error) 
 	}
 
 	if err := conn.Ping(context.Background()); err != nil {
+		conn.Close()
 		return nil, err
 	}
 
@@ -210,6 +224,8 @@ func (c *ClientDB) GetCHDB(clientID, projectID string) (clickhouse.Conn, error) 
 
 func (c *ClientDB) cleanupLoop() {
 	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
 	for range ticker.C {
 		now := time.Now()
 
@@ -305,42 +321,4 @@ func fetchClickhouseDBConfig(clientID, projectID string) (*CHConfig, error) {
 		Scan(&cfg.Host, &cfg.Port, &cfg.Database, &cfg.User, &cfg.Password)
 
 	return &cfg, err
-}
-
-/* ============================================================
-   UTIL
-============================================================ */
-
-func RowsToMap(rows *sql.Rows) ([]map[string]interface{}, error) {
-	defer rows.Close()
-
-	cols, err := rows.Columns()
-	if err != nil {
-		return nil, err
-	}
-
-	var out []map[string]interface{}
-
-	for rows.Next() {
-		vals := make([]interface{}, len(cols))
-		ptrs := make([]interface{}, len(cols))
-		for i := range vals {
-			ptrs[i] = &vals[i]
-		}
-
-		if err := rows.Scan(ptrs...); err != nil {
-			return nil, err
-		}
-
-		row := make(map[string]interface{})
-		for i, col := range cols {
-			if b, ok := vals[i].([]byte); ok {
-				row[col] = string(b)
-			} else {
-				row[col] = vals[i]
-			}
-		}
-		out = append(out, row)
-	}
-	return out, nil
 }
