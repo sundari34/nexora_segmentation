@@ -199,6 +199,7 @@ func (c *ClientDB) GetCHDB(clientID, projectID string) (clickhouse.Conn, error) 
 		MaxOpenConns:    5,
 		MaxIdleConns:    2,
 		ConnMaxLifetime: time.Hour,
+		Protocol:        clickhouse.HTTP,
 	}
 
 	conn, err := clickhouse.Open(opts)
