@@ -21,6 +21,20 @@ type SegmentPayload struct {
 	ProjectID      string      `json:"project_id,omitempty"`
 }
 
+type SegmentNewPayload struct {
+	GroupCondition string      `json:"group_condition,omitempty"` // "and" / "or" (across groups)
+	Groups         []RuleGroup `json:"groups,omitempty"`
+	Property       string      `json:"property,omitempty"`
+	Channel        string      `json:"channel,omitempty"`
+	NexoraIDs      []string    `json:"nexora_id,omitempty"`
+	ClientID       string      `json:"client_id,omitempty"`
+	ProjectID      string      `json:"project_id,omitempty"`
+	IsNeedCount    bool        `json:"need_count,omitempty"`
+	IsNeedSQL      bool        `json:"need_sql,omitempty"`
+	IsNeedValue    bool        `json:"need_value,omitempty"`
+	Category       string      `json:"category"`
+}
+
 // NOTE: new top-level payload is an array of group-like objects.
 // To remain backwards compatible we implement a custom Unmarshal below
 // which accepts either:
