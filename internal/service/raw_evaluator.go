@@ -287,12 +287,12 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 		)
 	}
 
-	// finalWhere := strings.Join(groupRules, " "+groupCondition+" ")
-
-	// return map[string]string{
-	// 	"where_statement": finalWhere,
-	// 	"join_statement":  "customer_profiles AS cp INNER JOIN nexora_profiles AS np ON cp.id = np.customer_profile_id INNER JOIN events AS ev ON np.nexora_id = ev.nexora_id INNER JOIN event_daily AS ed ON ev.event_name = ed.event_name",
-	// }
+	finalWhere := strings.Join(groupRules, " "+groupCondition+" ")
+	fmt.Println("********* QUERY MAP *********")
+	fmt.Println(map[string]string{
+		"where_statement": finalWhere,
+		"join_statement":  "customer_profiles AS cp INNER JOIN nexora_profiles AS np ON cp.id = np.customer_profile_id INNER JOIN events AS ev ON np.nexora_id = ev.nexora_id INNER JOIN event_daily AS ed ON ev.event_name = ed.event_name",
+	})
 
 	return nil, nil
 }
