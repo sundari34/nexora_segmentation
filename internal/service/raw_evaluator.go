@@ -294,5 +294,8 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 		"join_statement":  "customer_profiles AS cp INNER JOIN nexora_profiles AS np ON cp.id = np.customer_profile_id INNER JOIN events AS ev ON np.nexora_id = ev.nexora_id INNER JOIN event_daily AS ed ON ev.event_name = ed.event_name",
 	})
 
+	FinalQuery := fmt.Sprintf("SELECT cp.email, cp.mobile, cp.id FROM customer_profiles AS cp INNER JOIN nexora_profiles AS np ON cp.id = np.customer_profile_id INNER JOIN events AS ev ON np.nexora_id = ev.nexora_id INNER JOIN event_daily AS ed ON ev.event_name = ed.event_name WHERE %s", finalWhere)
+	fmt.Println(FinalQuery)
+	fmt.Println("(((FinalQuery)))")
 	return nil, nil
 }
