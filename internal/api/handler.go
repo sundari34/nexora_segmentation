@@ -16,25 +16,25 @@ func EvaluateHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	fmt.Println(r.Body)
 	fmt.Println("(((((((((((((((((((((r.Body)))))))))))))))))))))")
-	var req models.SegmentPayload
+	var req models.SegmentNewPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if sid := r.URL.Query().Get("segment_id"); sid != "" {
-		req.SegmentID = sid
-	}
+	// if sid := r.URL.Query().Get("segment_id"); sid != "" {
+	// 	req.SegmentID = sid
+	// }
 
-	members, err := service.Evaluate(req)
+	members, err := service.EvaluteRaw(req)
 	if err != nil {
 		http.Error(w, "evaluation failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	resp := map[string]any{
-		"segment_id": req.SegmentID,
-		"count":      len(members),
-		"matches":    members, // list of {nexora_id, client_id}
+		// "segment_id": req.SegmentID,
+		"count":   len(members),
+		"matches": members, // list of {nexora_id, client_id}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
