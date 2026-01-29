@@ -31,283 +31,6 @@ type normalizedCount struct {
 	Max      *utils.FlexibleString
 }
 
-func EvaluateNew(req models.SegmentNewPayload) (map[string]interface{}, error) {
-	globalQuery := ""
-	globalWhere := ""
-
-	if len(req.NexoraIDs) > 0 {
-		inNexoraIDs := "'" + strings.Join(req.NexoraIDs, "','") + "'"
-		globalWhere += fmt.Sprintf(" Where n.nexora_id in (%s)", inNexoraIDs)
-
-	} else if len(req.Groups) > 0 {
-
-	} else {
-		return nil, fmt.Errorf("no filters provided")
-	}
-
-	if req.Category == "campaign_service" {
-		globalQuery += "SELECT n.nexora_id, coalesce(nullIf(JSONExtractString(argMaxMerge(c.user_properties_state), 'language'),''),'default') AS language, n.customer_profile_id as profile_id FROM nexora_profiles_latest AS n LEFT JOIN customer_profiles_latest AS c %s ON n.customer_profile_id = c.id  %s GROUP BY n.nexora_id %s"
-	}
-
-	// DB credentials
-	clientDBManager := db.NewClientDB()
-	mysqlConn, err := clientDBManager.GetMysqlDB(req.ClientID, req.ProjectID)
-	clickhouseConn, err := clientDBManager.GetCHDB(req.ClientID, req.ProjectID)
-	loc, _ := time.LoadLocation("Asia/Kolkata")
-	var whereClauses []string
-	var havingClauses []string
-	var params []any
-	var havingParams []any
-	for gi, group := range req.Groups {
-		log.Printf("entered loop")
-		log.Printf(" Group %v", group)
-		if len(group.Filters) == 0 {
-			log.Printf("no group")
-			continue
-		}
-
-		var groupWhere []string
-		var groupHaving []string
-		var groupParams []any
-		var groupHavingParams []any
-		var userPropertyIDs []string
-
-		for fi, f := range group.Filters {
-			log.Printf("in a loop")
-			nt, nc, _, _, _ := normalizeFilter(f)
-
-			b, err := json.MarshalIndent(f, "", "  ")
-			if err != nil {
-				fmt.Println("error marshalling:", err)
-
-			}
-			fmt.Println(string(b))
-
-			if f.ConditionBlock != nil && f.ConditionBlock.UserPropertyQuery != nil {
-				upq := f.ConditionBlock.UserPropertyQuery
-
-				var upqLite utils.UserPropertyQueryLite
-				b, _ := json.Marshal(upq)
-				_ = json.Unmarshal(b, &upqLite)
-
-				whereClause, params, err := utils.BuildUserPropertyQuery(&upqLite)
-				if err != nil {
-					return nil, fmt.Errorf("error building user property query: %v", err)
-				}
-
-				// // add nexora_id in condition
-				// if req.NexoraID != "" {
-				// 	whereClause += fmt.Sprintf(" and nexora_id = %s", req.NexoraID)
-				// }
-
-				if mysqlConn == nil {
-					return nil, fmt.Errorf("mysql connection not initialized")
-				}
-
-				query := fmt.Sprintf(`
-					SELECT np.nexora_id
-					FROM nexora_profiles np
-					JOIN customer_profiles cp ON np.customer_profile_id = cp.id
-					WHERE %s
-				`, whereClause)
-
-				// Debug: print query and parameters
-				fmt.Println("---- User Property Query ----")
-				fmt.Println("Query:", query)
-				fmt.Println("Params:", params)
-				fmt.Println("-----------------------------")
-
-				rows, err := mysqlConn.Query(query, params...)
-				if err != nil {
-					return nil, fmt.Errorf("error executing user property query: %v", err)
-				}
-				defer rows.Close()
-
-				var ids []string
-				for rows.Next() {
-					var id string
-					if err := rows.Scan(&id); err == nil {
-						ids = append(ids, id)
-					}
-				}
-
-				if len(ids) > 0 {
-					userPropertyIDs = append(userPropertyIDs, ids...)
-				}
-
-				continue
-			}
-
-			start, end, err := utils.DeriveDateRange(nt.Operator, nt.Start, nt.End, nt.Value, nt.DayValue, nt.DayCount, time.Now(), loc)
-			if err != nil {
-				return nil, fmt.Errorf("DeriveDateRange failed at group %d filter %d: %v", gi, fi, err)
-			}
-
-			eventCategory := mapEventType(f.EventType)
-			eventName := f.EventName
-			if f.ConditionBlock != nil {
-				eventCategory = mapEventType(f.ConditionBlock.EventType)
-				eventName = f.ConditionBlock.EventName
-			}
-
-			// WHERE: row-level
-			var timeClause string
-			var timeParams []any
-
-			op := strings.ToLower(nt.Operator)
-			switch op {
-			case "before":
-				single := nt.Value
-				if single == nil {
-					single = nt.DayValue
-				}
-				timeClause = "event_date < toDate(?)"
-				timeParams = []any{single}
-
-			case "on":
-				single := nt.Value
-				if single == nil {
-					single = nt.DayValue
-				}
-				// ✅ For strict equality (date = given date)
-				timeClause = "event_date = toDate(?)"
-				timeParams = []any{single}
-
-			default:
-				timeClause = "event_date >= toDate(?) AND event_date <= toDate(?)"
-				timeParams = []any{start, end}
-			}
-
-			whereClause := "(event_category = ? AND event_name = ? AND " + timeClause + ")"
-			groupWhere = append(groupWhere, whereClause)
-			groupParams = append(groupParams, eventCategory, eventName)
-			groupParams = append(groupParams, timeParams...)
-
-			// HAVING: aggregate-level
-			var havingClause string
-			switch strings.ToLower(nc.Operator) {
-			case "between":
-				if nc.Min == nil || nc.Max == nil {
-					return nil, fmt.Errorf("between operator requires min and max")
-				}
-				havingClause = "sum(event_count) >= ? AND sum(event_count) <= ?"
-				groupHavingParams = append(groupHavingParams, nc.Min.String(), nc.Max.String())
-			default:
-				mapped, err := mapCountOperator(nc.Operator)
-				if err != nil {
-					return nil, err
-				}
-				if nc.Value == nil {
-					return nil, fmt.Errorf("count value required")
-				}
-				valInt, err := nc.Value.ToInt()
-				if err != nil {
-					return nil, fmt.Errorf("invalid count.value: %v", err)
-				}
-				havingClause = fmt.Sprintf("sum(event_count) %s ?", mapped)
-				groupHavingParams = append(groupHavingParams, valInt)
-			}
-			groupHaving = append(groupHaving, havingClause)
-		}
-		fmt.Println(userPropertyIDs)
-		fmt.Println("((((userPropertyIDs))))")
-		if len(userPropertyIDs) > 0 {
-			placeholder := strings.Repeat("?,", len(userPropertyIDs))
-			placeholder = strings.TrimSuffix(placeholder, ",")
-			groupWhere = append(groupWhere, fmt.Sprintf("nexora_id IN (%s)", placeholder))
-			for _, id := range userPropertyIDs {
-				groupParams = append(groupParams, id)
-			}
-		}
-		// combine filters within group
-		if len(groupWhere) > 0 {
-			whereClauses = append(whereClauses, "("+strings.Join(groupWhere, " "+strings.ToUpper(group.MatchMode)+" ")+")")
-			if len(groupHaving) > 0 {
-				havingClauses = append(havingClauses, "("+strings.Join(groupHaving, " AND ")+")")
-				havingParams = append(havingParams, groupHavingParams...)
-			}
-			params = append(params, groupParams...)
-		}
-	}
-
-	fmt.Println(whereClauses)
-	fmt.Println("((((((whereClauses))))))")
-	if len(whereClauses) < 1 {
-		return []string{}, nil
-	}
-	finalWhere := strings.Join(whereClauses, " AND ")
-	finalHaving := ""
-	if len(havingClauses) > 0 {
-		finalHaving = "HAVING " + strings.Join(havingClauses, " AND ")
-	}
-
-	// send nexora ids if it only contains nexora_Id not event conditions suitable for csv uploaded peoples
-	onlyNexoraFilter :=
-		len(whereClauses) == 1 &&
-			strings.Contains(whereClauses[0], "nexora_id IN") &&
-			len(havingClauses) == 0
-	fmt.Println(onlyNexoraFilter)
-	fmt.Println(whereClauses)
-	fmt.Println("(((((whereClauses)))))")
-	if onlyNexoraFilter {
-		fmt.Println("Only nexora_id filter found, skipping query")
-
-		var out []string
-		for _, id := range params {
-			out = append(out, fmt.Sprintf("%v", id))
-		}
-		return out, nil
-	}
-
-	q := fmt.Sprintf(`
-		SELECT nexora_id 
-		FROM event_daily
-		WHERE %s
-		GROUP BY nexora_id
-		%s
-	`, finalWhere, finalHaving)
-
-	if db.IsQueryLoggingEnabled() {
-		log.Printf("[ClickHouse] Prefilter Query: %s | Params: %+v %+v\n", q, params, havingParams)
-	}
-
-	ctx := context.Background()
-	rows, err := clickhouseConn.Query(ctx, q, append(params, havingParams...)...)
-	if err != nil {
-		fmt.Println(err)
-		fmt.Println("((((((((err ins clickhouse))))))))")
-		return nil, err
-	}
-	defer rows.Close()
-	fmt.Println(rows)
-	fmt.Println("((((((rows))))))")
-	var out []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		fmt.Println(id)
-		fmt.Println("((((id))))")
-		out = append(out, id)
-	}
-	fmt.Println(out)
-	return out, rows.Err()
-
-	return nil, nil
-}
-
-func GetQueryBasedOnCategory(category string) map[string]interface{} {
-	query := make(map[string]interface{})
-	switch category {
-	case "campaign_service":
-		query["statement"] = "SELECT n.nexora_id, coalesce(nullIf(JSONExtractString(argMaxMerge(c.user_properties_state), 'language'),''),'default') AS language, n.customer_profile_id as profile_id FROM nexora_profiles_latest AS n LEFT JOIN customer_profiles_latest AS c ON n.customer_profile_id = c.id  %s GROUP BY n.nexora_id %s"
-	default:
-		query["statement"] = "SELECT n.nexora_id, coalesce(nullIf(JSONExtractString(argMaxMerge(c.user_properties_state), 'language'),''),'default') AS language, n.customer_profile_id as profile_id FROM nexora_profiles_latest AS n LEFT JOIN customer_profiles_latest AS c ON n.customer_profile_id = c.id  %s GROUP BY n.nexora_id %s"
-	}
-	return query
-}
-
 // ---------------------- MAIN EVALUATE ----------------------
 func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 	// 1️⃣ Prefilter candidates based on first filter
@@ -355,8 +78,6 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 	if isUserPropertyOnly {
 		clientDBManager := db.NewClientDB()
 		mysqlTenantConn, err := clientDBManager.GetMysqlDB(req.ClientID, req.ProjectID)
-		clickhouseConn, err := clientDBManager.GetCHDB(req.ClientID, req.ProjectID)
-		ctx := context.Background()
 		if err != nil {
 			log.Println(nexoraIDs)
 			fmt.Println(err)
@@ -373,8 +94,7 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 
 			if req.Property != "" {
 				userPropertySql = fmt.Sprintf(
-					// "COALESCE(JSON_UNQUOTE(JSON_EXTRACT(user_properties, '$.%s')), 'default') AS property",
-					"COALESCE(JSONExtractString(finalizeAggregation(cp.user_properties_state), '{%s}'),'default') AS property",
+					"COALESCE(JSON_UNQUOTE(JSON_EXTRACT(user_properties, '$.%s')), 'default') AS property",
 					req.Property,
 				)
 			} else {
@@ -383,7 +103,7 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 
 			if req.Channel != "" {
 				if req.Channel == "email" {
-					where += " AND finalizeAggregation(cp.email_state) != ''"
+					where += " AND email IS NOT NULL AND email != ''"
 				} else if req.Channel == "mobile" || req.Channel == "sms" {
 					where += " AND mobile IS NOT NULL AND mobile != ''"
 				} else if req.Channel == "push" || req.Channel == "web_push" {
@@ -404,7 +124,6 @@ func Evaluate(req models.SegmentPayload) ([]models.Member, error) {
 			fmt.Println(q)
 			fmt.Println("((((q))))")
 			rows, err := mysqlTenantConn.Query(q)
-			clickhouseConn.Query(ctx, q)
 			if err != nil {
 				fmt.Println(err)
 				fmt.Println("(((((((((((((((err inside property getting)))))))))))))))")
@@ -742,6 +461,96 @@ func normalizeFilter(f models.Filter) (normalizedTime, normalizedCount, int, str
 
 	return nt, nc, eventID, cond, eventName + "|" + eventType
 }
+
+// ---------------------- DEEP FILTER ----------------------
+// func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member, error) {
+// 	if len(req.Groups) == 0 || len(req.Groups[0].Filters) == 0 {
+// 		return nil, fmt.Errorf("no filters provided")
+// 	}
+
+// 	f := req.Groups[0].Filters[0]
+// 	log.Printf("%+v", f)
+// 	log.Printf("%+v", nexoraIDs)
+// 	nt, _, _, condStr, _ := normalizeFilter(f)
+// 	log.Printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ condition string: %s", condStr)
+
+// 	loc, _ := time.LoadLocation("Asia/Kolkata")
+// 	start, end, err := utils.DeriveDateRange(nt.Operator, nt.Start, nt.End, nt.Value, nt.DayValue, nt.DayCount, time.Now(), loc)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	log.Printf("+++2222222+++++++++++++++++ ")
+// 	eventCategory := mapEventType(f.EventType)
+// 	eventName := f.EventName
+// 	if f.ConditionBlock != nil {
+// 		eventCategory = mapEventType(f.ConditionBlock.EventType)
+// 		eventName = f.ConditionBlock.EventName
+// 	}
+// 	log.Printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ ")
+// 	timeClause := "event_date >= toDate(?) AND event_date <= toDate(?)"
+// 	timeParams := []any{start, end}
+// 	if strings.ToLower(nt.Operator) == "before" {
+// 		single := nt.Value
+// 		if single == nil {
+// 			single = nt.DayValue
+// 		}
+// 		timeClause = "event_date < toDate(?)"
+// 		timeParams = []any{single}
+// 	}
+
+// 	inPh := makePlaceholders(len(nexoraIDs))
+// 	baseWhere := fmt.Sprintf(`
+// 		WHERE event_category = ?
+// 		  AND event_name = ?
+// 		  AND %s
+// 		  AND nexora_id IN (%s)
+// 	`, timeClause, inPh)
+
+// 	var q string
+// 	cond := f.Condition
+// 	if f.ConditionBlock != nil {
+// 		cond = f.ConditionBlock.Condition
+// 	}
+
+// 	if cond == "has_performed" {
+// 		q = `SELECT DISTINCT nexora_id, client_id FROM events` + baseWhere
+// 	} else if cond == "has_not_performed" {
+// 		q = fmt.Sprintf(`
+// 			SELECT DISTINCT nexora_id, client_id
+// 			FROM customer_profiles
+// 			WHERE nexora_id IN (%s)
+// 			  AND nexora_id NOT IN (
+// 				SELECT nexora_id FROM events %s
+// 			  )
+// 		`, inPh, baseWhere)
+// 	} else {
+// 		return nil, fmt.Errorf("unsupported condition: %s", cond)
+// 	}
+
+// 	params := []any{eventCategory, eventName}
+// 	params = append(params, timeParams...)
+// 	for _, id := range nexoraIDs {
+// 		params = append(params, id)
+// 	}
+
+// 	conn := db.GetClickhouse()
+// 	ctx := context.Background()
+// 	rows, err := conn.Query(ctx, q, params...)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer rows.Close()
+
+// 	var members []models.Member
+// 	for rows.Next() {
+// 		var m models.Member
+// 		if err := rows.Scan(&m.NexoraID, &m.ClientID); err != nil {
+// 			return nil, err
+// 		}
+// 		members = append(members, m)
+// 	}
+// 	return members, rows.Err()
+// }
 
 func deepFilter(req models.SegmentPayload, nexoraIDs []string) ([]models.Member, error) {
 	if len(req.Groups) == 0 || len(req.Groups[0].Filters) == 0 {
