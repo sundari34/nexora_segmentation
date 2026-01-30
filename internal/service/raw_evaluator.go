@@ -19,8 +19,9 @@ func getTimeConditionsTyped(tc *models.TimeCondition) string {
 	now := time.Now().UTC()
 
 	days, err := strconv.Atoi(tc.Value)
-	if err != nil {
+	if err != nil && op != "between" {
 		fmt.Println(fmt.Errorf("invalid date format: %v", err))
+		return ""
 	}
 
 	switch op {
