@@ -79,19 +79,27 @@ func getCountConditionsTyped(cc *models.CountCondition) string {
 
 	op := strings.ToLower(cc.Operator)
 
+	var count int
+	switch v := cc.Value.(type) {
+	case int:
+		count = v
+	case string:
+		d, _ := strconv.Atoi(v)
+		count = d
+	}
 	switch op {
 
 	case "greater_than":
-		return fmt.Sprintf("ed.event_count > %d", cc.Value)
+		return fmt.Sprintf("ed.event_count > %d", count)
 
 	case "greater_than_or_equal":
-		return fmt.Sprintf("ed.event_count >= %d", cc.Value)
+		return fmt.Sprintf("ed.event_count >= %d", count)
 
 	case "less_than":
-		return fmt.Sprintf("ed.event_count < %d", cc.Value)
+		return fmt.Sprintf("ed.event_count < %d", count)
 
 	case "less_than_or_equal":
-		return fmt.Sprintf("ed.event_count <= %d", cc.Value)
+		return fmt.Sprintf("ed.event_count <= %d", count)
 
 	case "between":
 		return fmt.Sprintf(
@@ -100,7 +108,7 @@ func getCountConditionsTyped(cc *models.CountCondition) string {
 		)
 
 	case "equal":
-		return fmt.Sprintf("ed.event_count = %d", cc.Value)
+		return fmt.Sprintf("ed.event_count = %d", count)
 
 	default:
 		return ""

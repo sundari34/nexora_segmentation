@@ -57,8 +57,8 @@ type TimeCondition struct {
 }
 
 type CountCondition struct {
-	Operator string `json:"operator"`
-	Value    int    `json:"value,omitempty"`
-	Min      int    `json:"min,omitempty"`
-	Max      int    `json:"max,omitempty"`
+	Operator string      `json:"operator"`
+	Value    interface{} `json:"value,omitempty"` // can be int or string
+	Min      int         `json:"min,omitempty"`
+	Max      int         `json:"max,omitempty"`
 }
