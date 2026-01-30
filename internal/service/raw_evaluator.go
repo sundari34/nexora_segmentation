@@ -340,6 +340,10 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 		)
 	}
 
+	fmt.Println(groupWhere)
+	fmt.Println("(((((groupWhere)))))")
+	fmt.Println(groupHaving)
+	fmt.Println("(((((((((groupHaving)))))))))")
 	finalWhere := "WHERE " + strings.Join(groupWhere, " "+groupCondition+" ")
 	finalHaving := "HAVING " + strings.Join(groupHaving, " "+groupCondition+" ")
 	fmt.Println("********* QUERY MAP *********")
