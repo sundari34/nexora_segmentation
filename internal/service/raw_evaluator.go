@@ -103,6 +103,7 @@ func getCountConditionsTyped(cc *models.CountCondition) string {
 func handleTypedRule(
 	r models.Rule,
 	where *[]string,
+	having *[]string,
 	scope *string,
 ) {
 	op := getCHEquivalentOperator(r.Operator)
@@ -111,7 +112,7 @@ func handleTypedRule(
 	if nested, ok := r.Value.(models.QueryBlock); ok {
 		*scope = r.Field
 		for _, nr := range nested.Rules {
-			handleTypedRule(nr, where, scope)
+			handleTypedRule(nr, where, having, scope)
 		}
 		return
 	}
@@ -119,11 +120,11 @@ func handleTypedRule(
 	if *scope == "user" {
 		cp := getCustomerProfileEquivalentField(r.Field)
 		if op == "like" {
-			*where = append(*where,
+			*having = append(*having,
 				fmt.Sprintf("%s %s '%%%v%%'", cp, op, r.Value),
 			)
 		} else {
-			*where = append(*where,
+			*having = append(*having,
 				fmt.Sprintf("%s %s '%v'", cp, op, r.Value),
 			)
 		}
@@ -163,16 +164,37 @@ func getCHEquivalentOperator(op string) string {
 }
 
 func getCustomerProfileEquivalentField(field string) string {
-	staticColumns := map[string]bool{
-		"id": true, "email": true, "mobile": true, "name": true,
-		"external_user_id": true, "client_id": true,
-		"project_id": true, "created_at": true, "updated_at": true,
+	// Fields that are NOT aggregate states (safe to GROUP BY)
+	groupableColumns := map[string]bool{
+		"id":               true,
+		"external_user_id": true,
 	}
 
-	if staticColumns[field] {
+	if groupableColumns[field] {
 		return fmt.Sprintf("cp.%s", field)
 	}
-	return fmt.Sprintf("JSONExtractString(cp.user_properties, '%s')", field)
+
+	// Known argMax state columns
+	switch field {
+	case "email":
+		return "argMaxMerge(cp.email_state)"
+	case "mobile":
+		return "argMaxMerge(cp.mobile_state)"
+	case "name":
+		return "argMaxMerge(cp.name_state)"
+	case "client_id":
+		return "argMaxMerge(cp.client_id_state)"
+	case "project_id":
+		return "argMaxMerge(cp.project_id_state)"
+	case "updated_at":
+		return "argMaxMerge(cp.updated_at_state)"
+	}
+
+	// Dynamic JSON fields from user_properties_state
+	return fmt.Sprintf(
+		"JSONExtractString(argMaxMerge(cp.user_properties_state), '%s')",
+		field,
+	)
 }
 
 func getEventsEquivalentField(field string) string {
@@ -223,12 +245,14 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 		groupCondition = "AND"
 	}
 
-	groupRules := []string{}
+	groupWhere := []string{}
+	groupHaving := []string{}
 
 	isOnlyUserProperty := true
 
 	for _, group := range req.Groups {
-		filterClauses := []string{}
+		whereClauses := []string{}
+		havingClauses := []string{}
 
 		for _, filter := range group.Filters {
 
@@ -244,31 +268,38 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 				// query rules
 				if ec.Query != nil {
 					where := []string{}
+					having := []string{}
 					field := ""
 					for _, r := range ec.Query.Rules {
-						handleTypedRule(r, &where, &field)
+						handleTypedRule(r, &where, &having, &field)
 					}
-					filterClauses = append(
-						filterClauses,
+					whereClauses = append(
+						whereClauses,
 						fmt.Sprintf("( %s )",
 							strings.Join(where, " "+strings.ToUpper(ec.Query.Combinator)+" "),
+						),
+					)
+					havingClauses = append(
+						havingClauses,
+						fmt.Sprintf("( %s )",
+							strings.Join(having, " "+strings.ToUpper(ec.Query.Combinator)+" "),
 						),
 					)
 				}
 
 				// time
 				if ec.Time != nil {
-					filterClauses = append(filterClauses, getTimeConditionsTyped(ec.Time))
+					whereClauses = append(whereClauses, getTimeConditionsTyped(ec.Time))
 				}
 
 				// count
 				if ec.Count != nil {
-					filterClauses = append(filterClauses, getCountConditionsTyped(ec.Count))
+					whereClauses = append(whereClauses, getCountConditionsTyped(ec.Count))
 				}
 
 				// event name
-				filterClauses = append(
-					filterClauses,
+				whereClauses = append(
+					whereClauses,
 					fmt.Sprintf("ed.event_name = '%s'", ec.EventName),
 				)
 
@@ -283,12 +314,13 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 
 				if up.UserPropertyQuery != nil {
 					where := []string{}
+					having := []string{}
 					field := "user"
 					for _, r := range up.UserPropertyQuery.Rules {
-						handleTypedRule(r, &where, &field)
+						handleTypedRule(r, &where, &having, &field)
 					}
-					filterClauses = append(
-						filterClauses,
+					whereClauses = append(
+						whereClauses,
 						fmt.Sprintf("( %s )",
 							strings.Join(where, " "+strings.ToUpper(up.UserPropertyQuery.Combinator)+" "),
 						),
@@ -297,24 +329,31 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 			}
 		}
 
-		groupRules = append(
-			groupRules,
-			strings.Join(filterClauses, " "+strings.ToUpper(group.MatchMode)+" "),
+		groupWhere = append(
+			groupWhere,
+			strings.Join(whereClauses, " "+strings.ToUpper(group.MatchMode)+" "),
+		)
+
+		groupHaving = append(
+			groupHaving,
+			strings.Join(havingClauses, " "+strings.ToUpper(group.MatchMode)+" "),
 		)
 	}
 
-	finalWhere := strings.Join(groupRules, " "+groupCondition+" ")
+	finalWhere := "WHERE " + strings.Join(groupWhere, " "+groupCondition+" ")
+	finalHaving := "HAVING " + strings.Join(groupHaving, " "+groupCondition+" ")
 	fmt.Println("********* QUERY MAP *********")
-	joinStatement := "customer_profiles AS cp INNER JOIN nexora_profiles AS np ON cp.id = np.customer_profile_id INNER JOIN events AS ev ON np.nexora_id = ev.nexora_id INNER JOIN event_daily AS ed ON ev.event_name = ed.event_name"
+	joinStatement := "customer_profiles_latest AS cp LEFT JOIN nexora_profiles_latest AS np ON np.customer_profile_id = cp.id INNER JOIN events AS ev ON np.nexora_id = ev.nexora_id INNER JOIN event_daily AS ed ON ev.event_name = ed.event_name"
 	if isOnlyUserProperty {
-		joinStatement = "customer_profiles AS cp INNER JOIN nexora_profiles AS np ON cp.id = np.customer_profile_id"
+		joinStatement = "customer_profiles_latest AS cp LEFT JOIN nexora_profiles_latest AS np ON np.customer_profile_id = cp.id"
 	}
 	fmt.Println(map[string]string{
-		"where_statement": finalWhere,
-		"join_statement":  joinStatement,
+		"where_statement":  finalWhere,
+		"join_statement":   joinStatement,
+		"having_statement": finalHaving,
 	})
 
-	FinalQuery := fmt.Sprintf("SELECT cp.email, cp.mobile, cp.id FROM %s WHERE %s", joinStatement, finalWhere)
+	FinalQuery := fmt.Sprintf("SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.updated_at_state) AS updated_at from %s %s group by cp.id %s", joinStatement, finalWhere, finalHaving)
 	fmt.Println(FinalQuery)
 	fmt.Println("(((FinalQuery)))")
 	return nil, nil
