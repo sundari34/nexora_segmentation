@@ -118,14 +118,26 @@ func handleTypedRule(
 
 	if *scope == "user" {
 		cp := getCustomerProfileEquivalentField(r.Field)
-		*where = append(*where,
-			fmt.Sprintf("%s %s '%v'", cp, op, r.Value),
-		)
+		if op == "like" {
+			*where = append(*where,
+				fmt.Sprintf("%s %s '%%%v%%'", cp, op, r.Value),
+			)
+		} else {
+			*where = append(*where,
+				fmt.Sprintf("%s %s '%v'", cp, op, r.Value),
+			)
+		}
 	} else {
 		ev := getEventsEquivalentField(r.Field)
-		*where = append(*where,
-			fmt.Sprintf("%s %s '%v'", ev, op, r.Value),
-		)
+		if op == "like" {
+			*where = append(*where,
+				fmt.Sprintf("%s %s '%%%v%%'", ev, op, r.Value),
+			)
+		} else {
+			*where = append(*where,
+				fmt.Sprintf("%s %s '%v'", ev, op, r.Value),
+			)
+		}
 	}
 }
 
