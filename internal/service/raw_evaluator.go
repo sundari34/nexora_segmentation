@@ -140,8 +140,6 @@ func handleTypedRule(
 			)
 		}
 	}
-	fmt.Println(having)
-	fmt.Println("(((((((having)))))))")
 }
 
 func getCHEquivalentOperator(op string) string {
@@ -275,18 +273,24 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 					for _, r := range ec.Query.Rules {
 						handleTypedRule(r, &where, &having, &field)
 					}
-					whereClauses = append(
-						whereClauses,
-						fmt.Sprintf("( %s )",
-							strings.Join(where, " "+strings.ToUpper(ec.Query.Combinator)+" "),
-						),
-					)
-					havingClauses = append(
-						havingClauses,
-						fmt.Sprintf("( %s )",
-							strings.Join(having, " "+strings.ToUpper(ec.Query.Combinator)+" "),
-						),
-					)
+					if len(where) > 0 {
+						whereClauses = append(
+							whereClauses,
+							fmt.Sprintf("( %s )",
+								strings.Join(where, " "+strings.ToUpper(ec.Query.Combinator)+" "),
+							),
+						)
+					}
+					if len(having) > 0 {
+						fmt.Println(having)
+						fmt.Println("((((having))))")
+						havingClauses = append(
+							havingClauses,
+							fmt.Sprintf("( %s )",
+								strings.Join(having, " "+strings.ToUpper(ec.Query.Combinator)+" "),
+							),
+						)
+					}
 				}
 
 				// time
@@ -321,12 +325,24 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 					for _, r := range up.UserPropertyQuery.Rules {
 						handleTypedRule(r, &where, &having, &field)
 					}
-					whereClauses = append(
-						whereClauses,
-						fmt.Sprintf("( %s )",
-							strings.Join(where, " "+strings.ToUpper(up.UserPropertyQuery.Combinator)+" "),
-						),
-					)
+					if len(where) > 0 {
+						whereClauses = append(
+							whereClauses,
+							fmt.Sprintf("( %s )",
+								strings.Join(where, " "+strings.ToUpper(up.UserPropertyQuery.Combinator)+" "),
+							),
+						)
+					}
+					if len(having) > 0 {
+						fmt.Println(having)
+						fmt.Println("((((having))))")
+						havingClauses = append(
+							havingClauses,
+							fmt.Sprintf("( %s )",
+								strings.Join(having, " "+strings.ToUpper(up.UserPropertyQuery.Combinator)+" "),
+							),
+						)
+					}
 				}
 			}
 		}
