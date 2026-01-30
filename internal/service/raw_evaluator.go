@@ -10,6 +10,25 @@ import (
 	"github.com/nexora/nexora_segmentation/internal/models"
 )
 
+func daysFromNow(dateStr string) (int, error) {
+	// Parse the date string in YYYY-MM-DD format
+	targetDate, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid date format: %v", err)
+	}
+
+	// Get current date in UTC (or local, depending on your logic)
+	now := time.Now().UTC()
+
+	// Calculate difference
+	duration := targetDate.Sub(now)
+
+	// Convert duration to days (rounding down)
+	days := int(duration.Hours() / 24)
+
+	return days, nil
+}
+
 func getTimeConditionsTyped(tc *models.TimeCondition) string {
 	if tc == nil {
 		return ""
@@ -18,7 +37,7 @@ func getTimeConditionsTyped(tc *models.TimeCondition) string {
 	op := strings.ToLower(tc.Operator)
 	now := time.Now().UTC()
 
-	days, err := strconv.Atoi(tc.Value)
+	days, err := daysFromNow(tc.Value)
 	if err != nil && op != "between" {
 		fmt.Println(fmt.Errorf("invalid date format: %v", err))
 		return ""
@@ -313,13 +332,21 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 				// time
 				if ec.Time != nil {
 					fmt.Println("Time condition")
-					whereClauses = append(whereClauses, getTimeConditionsTyped(ec.Time))
+					timeCondition := getTimeConditionsTyped(ec.Time)
+					fmt.Println(timeCondition)
+					fmt.Println("((((timeCondition))))")
+					if timeCondition != "" {
+						whereClauses = append(whereClauses, timeCondition)
+					}
 				}
 
 				// count
 				if ec.Count != nil {
 					fmt.Println("Count condition")
-					whereClauses = append(whereClauses, getCountConditionsTyped(ec.Count))
+					countCondition := getCountConditionsTyped(ec.Count)
+					if countCondition != "" {
+						whereClauses = append(whereClauses, getCountConditionsTyped(ec.Count))
+					}
 				}
 
 				// event name
