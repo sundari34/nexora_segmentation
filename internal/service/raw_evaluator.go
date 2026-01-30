@@ -362,21 +362,34 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 	fmt.Println("(((((groupWhere)))))")
 	fmt.Println(groupHaving)
 	fmt.Println("(((((((((groupHaving)))))))))")
-	finalWhere := "WHERE " + strings.Join(groupWhere, " "+groupCondition+" ")
-	finalHaving := "HAVING " + strings.Join(groupHaving, " "+groupCondition+" ")
-	fmt.Println("********* QUERY MAP *********")
-	joinStatement := "customer_profiles_latest AS cp LEFT JOIN nexora_profiles_latest AS np ON np.customer_profile_id = cp.id INNER JOIN events AS ev ON np.nexora_id = ev.nexora_id INNER JOIN event_daily AS ed ON ev.event_name = ed.event_name"
-	if isOnlyUserProperty {
-		joinStatement = "customer_profiles_latest AS cp LEFT JOIN nexora_profiles_latest AS np ON np.customer_profile_id = cp.id"
+	finalWhere := ""
+	finalHaving := ""
+	joinStatement := ""
+	selectStatement := ""
+	limitAndOffsets := ""
+	// check for having
+	if len(groupHaving) > 0 {
+		finalHaving = "HAVING " + strings.Join(groupHaving, " "+groupCondition+" ")
 	}
+
+	// check fot where
+	if len(groupWhere) > 0 {
+		finalWhere = "WHERE " + strings.Join(groupWhere, " "+groupCondition+" ")
+		joinStatement = "event_users eu ANY INNER JOIN nexora_profiles_latest np ON eu.nexora_id = np.nexora_id ANY INNER JOIN customer_profiles_latest cp ON np.customer_profile_id = cp.id"
+		selectStatement = fmt.Sprintf("WITH event_users AS (SELECT DISTINCT ev.nexora_id FROM events ev INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id %s) SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender %s group by cp.id order by customer_profile_id %s", finalWhere, joinStatement, limitAndOffsets)
+	} else {
+		joinStatement = "customer_profiles_latest cp LEFT JOIN nexora_profiles_latest np ON cp.id = np.customer_profile_id"
+		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender %s group by cp.id order by customer_profile_id %s", joinStatement, limitAndOffsets)
+	}
+
 	fmt.Println(map[string]string{
 		"where_statement":  finalWhere,
 		"join_statement":   joinStatement,
 		"having_statement": finalHaving,
+		"select_statement": selectStatement,
 	})
 
-	FinalQuery := fmt.Sprintf("SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.updated_at_state) AS updated_at from %s %s group by cp.id %s", joinStatement, finalWhere, finalHaving)
-	fmt.Println(FinalQuery)
-	fmt.Println("(((FinalQuery)))")
+	fmt.Println(selectStatement)
+	fmt.Println("(((selectStatement)))")
 	return nil, nil
 }
