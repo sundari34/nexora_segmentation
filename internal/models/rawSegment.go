@@ -51,7 +51,7 @@ type Rule struct {
 
 type TimeCondition struct {
 	Operator  string `json:"operator"`
-	Value     string `json:"value,omitempty"`
+	Value     int    `json:"value,omitempty"`
 	StartDate string `json:"start_date,omitempty"`
 	EndDate   string `json:"end_date,omitempty"`
 }

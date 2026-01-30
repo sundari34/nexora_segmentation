@@ -16,7 +16,8 @@ func getTimeConditionsTyped(tc *models.TimeCondition) string {
 
 	op := strings.ToLower(tc.Operator)
 	now := time.Now().UTC()
-
+	fmt.Println(tc.Value)
+	fmt.Println("((((tc.Value))))")
 	switch op {
 
 	case "last_n_days":
