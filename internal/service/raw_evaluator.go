@@ -248,8 +248,6 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 	groupWhere := []string{}
 	groupHaving := []string{}
 
-	isOnlyUserProperty := true
-
 	for _, group := range req.Groups {
 		whereClauses := []string{}
 		havingClauses := []string{}
