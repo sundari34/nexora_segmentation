@@ -269,7 +269,7 @@ func getEventsEquivalentField(field string) string {
 func chDateTime(t time.Time) string {
 	return fmt.Sprintf(
 		"toDateTime('%s', 'UTC')",
-		t.UTC().Format("2006-01-02 15:04:05"),
+		t.UTC().Format("2006-01-02"),
 	)
 }
 
