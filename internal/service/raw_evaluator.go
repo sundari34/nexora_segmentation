@@ -356,18 +356,7 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 			)
 		}
 	}
-	fmt.Printf("groupWhere = %#v\n", groupWhere)
-	fmt.Printf("len = %d\n", len(groupWhere))
 
-	for i, v := range groupWhere {
-		fmt.Printf("index=%d value='%s' len(value)=%d\n", i, v, len(v))
-	}
-
-	fmt.Println(groupWhere)
-	fmt.Println(len(groupWhere))
-	fmt.Println("(((((groupWhere)))))")
-	fmt.Println(groupHaving)
-	fmt.Println("(((((((((groupHaving)))))))))")
 	finalWhere := ""
 	finalHaving := ""
 	joinStatement := ""
@@ -387,10 +376,10 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 	if len(groupWhere) > 0 {
 		finalWhere = "WHERE " + strings.Join(groupWhere, " "+groupCondition+" ")
 		joinStatement = "event_users eu ANY INNER JOIN nexora_profiles_latest np ON eu.nexora_id = np.nexora_id ANY INNER JOIN customer_profiles_latest cp ON np.customer_profile_id = cp.id"
-		selectStatement = fmt.Sprintf("WITH event_users AS (SELECT DISTINCT ev.nexora_id FROM events ev INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id %s) SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender %s group by cp.id order by customer_profile_id %s", finalWhere, joinStatement, limitAndOffsets)
+		selectStatement = fmt.Sprintf("WITH event_users AS (SELECT DISTINCT ev.nexora_id FROM events ev INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id %s) SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender %s group by cp.id %s order by customer_profile_id %s", finalWhere, joinStatement, finalHaving, limitAndOffsets)
 	} else {
 		joinStatement = "customer_profiles_latest cp LEFT JOIN nexora_profiles_latest np ON cp.id = np.customer_profile_id"
-		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender %s group by cp.id order by customer_profile_id %s", joinStatement, limitAndOffsets)
+		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender %s group by cp.id %s order by customer_profile_id %s", joinStatement, finalHaving, limitAndOffsets)
 	}
 
 	fmt.Println(map[string]string{
