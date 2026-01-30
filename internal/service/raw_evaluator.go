@@ -260,6 +260,8 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 			case "event":
 				var ec models.EventCondition
 				if err := json.Unmarshal(filter.Condition, &ec); err != nil {
+					fmt.Println(err)
+					fmt.Println("(((err)))")
 					continue
 				}
 
@@ -293,11 +295,13 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 
 				// time
 				if ec.Time != nil {
+					fmt.Println("Time condition")
 					whereClauses = append(whereClauses, getTimeConditionsTyped(ec.Time))
 				}
 
 				// count
 				if ec.Count != nil {
+					fmt.Println("Count condition")
 					whereClauses = append(whereClauses, getCountConditionsTyped(ec.Count))
 				}
 
@@ -306,7 +310,8 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 					whereClauses,
 					fmt.Sprintf("ed.event_name = '%s'", ec.EventName),
 				)
-
+				fmt.Println(whereClauses)
+				fmt.Println("(((((((whereClauses)))))))")
 			// ---------- USER PROPERTY ----------
 			case "user_property":
 				var up models.UserPropertyCondition
