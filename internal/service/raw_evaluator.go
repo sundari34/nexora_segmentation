@@ -355,6 +355,7 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 	}
 
 	fmt.Println(groupWhere)
+	fmt.Println(len(groupWhere))
 	fmt.Println("(((((groupWhere)))))")
 	fmt.Println(groupHaving)
 	fmt.Println("(((((((((groupHaving)))))))))")
