@@ -307,8 +307,6 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 					fmt.Sprintf("ed.event_name = '%s'", ec.EventName),
 				)
 
-				isOnlyUserProperty = false
-
 			// ---------- USER PROPERTY ----------
 			case "user_property":
 				var up models.UserPropertyCondition
