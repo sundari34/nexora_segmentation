@@ -140,6 +140,8 @@ func handleTypedRule(
 			)
 		}
 	}
+	fmt.Println(having)
+	fmt.Println("(((((((having)))))))")
 }
 
 func getCHEquivalentOperator(op string) string {
