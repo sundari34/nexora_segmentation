@@ -213,6 +213,8 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 
 	groupRules := []string{}
 
+	isOnlyUserProperty := true
+
 	for _, group := range req.Groups {
 		filterClauses := []string{}
 
@@ -258,6 +260,8 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 					fmt.Sprintf("ed.event_name = '%s'", ec.EventName),
 				)
 
+				isOnlyUserProperty = false
+
 			// ---------- USER PROPERTY ----------
 			case "user_property":
 				var up models.UserPropertyCondition
@@ -289,12 +293,16 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 
 	finalWhere := strings.Join(groupRules, " "+groupCondition+" ")
 	fmt.Println("********* QUERY MAP *********")
+	joinStatement := "customer_profiles AS cp INNER JOIN nexora_profiles AS np ON cp.id = np.customer_profile_id INNER JOIN events AS ev ON np.nexora_id = ev.nexora_id INNER JOIN event_daily AS ed ON ev.event_name = ed.event_name"
+	if isOnlyUserProperty {
+		joinStatement = "customer_profiles AS cp INNER JOIN nexora_profiles AS np ON cp.id = np.customer_profile_id"
+	}
 	fmt.Println(map[string]string{
 		"where_statement": finalWhere,
-		"join_statement":  "customer_profiles AS cp INNER JOIN nexora_profiles AS np ON cp.id = np.customer_profile_id INNER JOIN events AS ev ON np.nexora_id = ev.nexora_id INNER JOIN event_daily AS ed ON ev.event_name = ed.event_name",
+		"join_statement":  joinStatement,
 	})
 
-	FinalQuery := fmt.Sprintf("SELECT cp.email, cp.mobile, cp.id FROM customer_profiles AS cp INNER JOIN nexora_profiles AS np ON cp.id = np.customer_profile_id INNER JOIN events AS ev ON np.nexora_id = ev.nexora_id INNER JOIN event_daily AS ed ON ev.event_name = ed.event_name WHERE %s", finalWhere)
+	FinalQuery := fmt.Sprintf("SELECT cp.email, cp.mobile, cp.id FROM %s WHERE %s", joinStatement, finalWhere)
 	fmt.Println(FinalQuery)
 	fmt.Println("(((FinalQuery)))")
 	return nil, nil
