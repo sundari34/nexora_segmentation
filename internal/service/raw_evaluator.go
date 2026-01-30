@@ -368,6 +368,8 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 		finalHaving = "HAVING " + strings.Join(groupHaving, " "+groupCondition+" ")
 	}
 
+	fmt.Println(len(groupWhere))
+	fmt.Println(len(groupHaving))
 	fmt.Println(len(groupWhere) > 0)
 	fmt.Println(len(groupHaving) > 0)
 	fmt.Println("((((((len(groupHaving) > 0))))))")
