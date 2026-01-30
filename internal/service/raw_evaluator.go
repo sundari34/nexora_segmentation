@@ -353,6 +353,12 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 			strings.Join(havingClauses, " "+strings.ToUpper(group.MatchMode)+" "),
 		)
 	}
+	fmt.Printf("groupWhere = %#v\n", groupWhere)
+	fmt.Printf("len = %d\n", len(groupWhere))
+
+	for i, v := range groupWhere {
+		fmt.Printf("index=%d value='%s' len(value)=%d\n", i, v, len(v))
+	}
 
 	fmt.Println(groupWhere)
 	fmt.Println(len(groupWhere))
