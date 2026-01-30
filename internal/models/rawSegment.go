@@ -7,13 +7,13 @@ type SegmentNewPayload struct {
 	Groups         []RuleGroupRaw `json:"groups,omitempty"`
 	Property       string         `json:"property,omitempty"`
 	Channel        string         `json:"channel,omitempty"`
-	NexoraIDs      string         `json:"nexora_id,omitempty"`
+	NexoraIDs      []string       `json:"nexora_id,omitempty"`
 	ClientID       string         `json:"client_id,omitempty"`
 	ProjectID      string         `json:"project_id,omitempty"`
 	IsNeedCount    bool           `json:"need_count,omitempty"`
 	IsNeedSQL      bool           `json:"need_sql,omitempty"`
 	IsNeedValue    bool           `json:"need_value,omitempty"`
-	Category       string         `json:"category"`
+	Source         string         `json:"source"`
 }
 
 type RuleGroupRaw struct {

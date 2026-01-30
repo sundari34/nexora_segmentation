@@ -1,12 +1,14 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/nexora/nexora_segmentation/internal/db"
 	"github.com/nexora/nexora_segmentation/internal/models"
 )
 
@@ -273,7 +275,27 @@ func chDateTime(t time.Time) string {
 	)
 }
 
-func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
+func buildInCondition(column string, values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+
+	escaped := make([]string, 0, len(values))
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v != "" {
+			escaped = append(escaped, fmt.Sprintf("'%s'", v))
+		}
+	}
+
+	if len(escaped) == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf(" WHERE %s IN (%s) ", column, strings.Join(escaped, ","))
+}
+
+func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, map[string]interface{}, error) {
 	groupCondition := strings.ToUpper(req.GroupCondition)
 	if groupCondition == "" {
 		groupCondition = "AND"
@@ -293,8 +315,6 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 			// ---------- EVENT ----------
 			case "event":
 				var ec models.EventCondition
-				fmt.Println(filter.Condition)
-				fmt.Println("(((filter.Condition)))")
 				if err := json.Unmarshal(filter.Condition, &ec); err != nil {
 					fmt.Println(err)
 					fmt.Println("(((err)))")
@@ -354,9 +374,8 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 					whereClauses,
 					fmt.Sprintf("ed.event_name = '%s'", ec.EventName),
 				)
-				fmt.Println(whereClauses)
-				fmt.Println("(((((((whereClauses)))))))")
-			// ---------- USER PROPERTY ----------
+
+				// ---------- USER PROPERTY ----------
 			case "user_property":
 				var up models.UserPropertyCondition
 				if err := json.Unmarshal(filter.Condition, &up); err != nil {
@@ -391,14 +410,7 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 				}
 			}
 		}
-		fmt.Println(whereClauses)
-		fmt.Println("(((((whereClauses)))))")
-		fmt.Println(group.MatchMode)
-		fmt.Println("((((group.MatchMode))))")
-		fmt.Println(strings.Join(whereClauses, " "+strings.ToUpper(group.MatchMode)+" "))
-		fmt.Println("(((((strings)))))")
-		fmt.Println(len(whereClauses))
-		fmt.Println("(((len(whereClauses))))")
+
 		if len(whereClauses) > 0 {
 			groupWhere = append(
 				groupWhere,
@@ -416,40 +428,74 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 	finalWhere := ""
 	finalHaving := ""
 	joinStatement := ""
-	selectStatement := ""
+	overallSelectStatement := ""
 	limitAndOffsets := ""
+	withStatement := ""
+	countStatement := ""
+	whereNonAggregateStatement := ""
+
 	// check for having
 	if len(groupHaving) > 0 {
 		finalHaving = "HAVING " + strings.Join(groupHaving, " "+groupCondition+" ")
+	} else {
+		finalHaving = ""
 	}
 
-	fmt.Println(groupWhere)
-	fmt.Println(groupHaving)
+	// check nexora_ids in condition
+	if len(req.NexoraIDs) > 0 {
+		whereNonAggregateStatement = buildInCondition("np.nexora_id", req.NexoraIDs)
+	}
+
 	fmt.Println(len(groupWhere))
 	fmt.Println(len(groupHaving))
 	fmt.Println(len(groupWhere) > 0)
 	fmt.Println(len(groupHaving) > 0)
 	fmt.Println("((((((len(groupHaving) > 0))))))")
+
+	selectStatement := "SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender"
+	if req.Source == "campaign_service" {
+		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), '%s') AS property", req.Property)
+	}
 	// check fot where
 	if len(groupWhere) > 0 {
-		fmt.Println(groupWhere)
 		finalWhere = "WHERE " + strings.Join(groupWhere, " "+groupCondition+" ")
-		fmt.Println(finalWhere)
+		withStatement = fmt.Sprintf("WITH event_users AS (SELECT DISTINCT ev.nexora_id FROM events ev INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id %s)", finalWhere)
 		joinStatement = "event_users eu ANY INNER JOIN nexora_profiles_latest np ON eu.nexora_id = np.nexora_id ANY INNER JOIN customer_profiles_latest cp ON np.customer_profile_id = cp.id"
-		selectStatement = fmt.Sprintf("WITH event_users AS (SELECT DISTINCT ev.nexora_id FROM events ev INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id %s) SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender from %s group by cp.id %s order by customer_profile_id %s", finalWhere, joinStatement, finalHaving, limitAndOffsets)
+		overallSelectStatement = fmt.Sprintf("%s %s from %s %s group by cp.id %s order by customer_profile_id %s", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
+		countStatement = fmt.Sprintf("%s SELECT COUNT(*) AS total_count FROM (%s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
 	} else {
 		joinStatement = "customer_profiles_latest cp LEFT JOIN nexora_profiles_latest np ON cp.id = np.customer_profile_id"
-		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender from %s group by cp.id %s order by customer_profile_id %s", joinStatement, finalHaving, limitAndOffsets)
+		overallSelectStatement = fmt.Sprintf("%s from %s %s group by cp.id %s order by customer_profile_id %s as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
+		countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM ( %s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
 	}
 
-	fmt.Println(map[string]string{
-		"where_statement":  finalWhere,
-		"join_statement":   joinStatement,
-		"having_statement": finalHaving,
-		"select_statement": selectStatement,
-	})
+	count := 0
+	if req.IsNeedCount {
+		clientDBManager := db.NewClientDB()
+		clickhouseConn, err := clientDBManager.GetCHDB(req.ClientID, req.ProjectID)
+		row := clickhouseConn.QueryRow(context.Background(), countStatement)
 
-	fmt.Println(selectStatement)
-	fmt.Println("(((selectStatement)))")
-	return nil, nil
+		// Scan the value into the variable
+		err = row.Scan(&count)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get count: %v", err)
+		}
+
+	}
+
+	query := map[string]string{
+		"where_statement":               finalWhere,
+		"join_statement":                joinStatement,
+		"having_statement":              finalHaving,
+		"select_statement":              selectStatement,
+		"with_statement":                withStatement,
+		"count_statement":               countStatement,
+		"where_non_aggregate_statement": whereNonAggregateStatement,
+		"overall_statement":             overallSelectStatement,
+	}
+
+	return nil, map[string]interface{}{
+		"query": query,
+		"count": count,
+	}, nil
 }
