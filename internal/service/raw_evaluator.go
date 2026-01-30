@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,38 +17,42 @@ func getTimeConditionsTyped(tc *models.TimeCondition) string {
 
 	op := strings.ToLower(tc.Operator)
 	now := time.Now().UTC()
-	fmt.Println(tc.Value)
-	fmt.Println("((((tc.Value))))")
+
+	days, err := strconv.Atoi(tc.Value)
+	if err != nil {
+		fmt.Println(fmt.Errorf("invalid date format: %v", err))
+	}
+
 	switch op {
 
 	case "last_n_days":
 		return fmt.Sprintf(
 			"ed.event_date <= %s",
-			chDateTime(now.AddDate(0, 0, -tc.Value)),
+			chDateTime(now.AddDate(0, 0, -days)),
 		)
 
 	case "next_n_days":
 		return fmt.Sprintf(
 			"ed.event_date >= %s",
-			chDateTime(now.AddDate(0, 0, tc.Value)),
+			chDateTime(now.AddDate(0, 0, days)),
 		)
 
 	case "on":
 		return fmt.Sprintf(
 			"ed.event_date = %s",
-			chDateTime(now.AddDate(0, 0, tc.Value)),
+			chDateTime(now.AddDate(0, 0, days)),
 		)
 
 	case "before":
 		return fmt.Sprintf(
 			"ed.event_date < %s",
-			chDateTime(now.AddDate(0, 0, tc.Value)),
+			chDateTime(now.AddDate(0, 0, days)),
 		)
 
 	case "after":
 		return fmt.Sprintf(
 			"ed.event_date > %s",
-			chDateTime(now.AddDate(0, 0, tc.Value)),
+			chDateTime(now.AddDate(0, 0, days)),
 		)
 
 	case "between":
@@ -260,6 +265,8 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 			// ---------- EVENT ----------
 			case "event":
 				var ec models.EventCondition
+				fmt.Println(filter.Condition)
+				fmt.Println("(((filter.Condition)))")
 				if err := json.Unmarshal(filter.Condition, &ec); err != nil {
 					fmt.Println(err)
 					fmt.Println("(((err)))")
