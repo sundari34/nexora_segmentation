@@ -364,17 +364,20 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, error) {
 				}
 			}
 		}
-
+		fmt.Println(whereClauses)
+		fmt.Println("(((((whereClauses)))))")
+		fmt.Println(group.MatchMode)
+		fmt.Println("((((group.MatchMode))))")
 		if len(whereClauses) > 0 {
 			groupWhere = append(
 				groupWhere,
-				fmt.Sprintf("(%s)", strings.Join(whereClauses, " "+strings.ToUpper(group.MatchMode)+" ")),
+				strings.Join(whereClauses, " "+strings.ToUpper(group.MatchMode)+" "),
 			)
 		}
 		if len(havingClauses) > 0 {
 			groupHaving = append(
 				groupHaving,
-				fmt.Sprintf("(%s)", strings.Join(havingClauses, " "+strings.ToUpper(group.MatchMode)+" ")),
+				strings.Join(havingClauses, " "+strings.ToUpper(group.MatchMode)+" "),
 			)
 		}
 	}
