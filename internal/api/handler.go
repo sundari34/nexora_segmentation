@@ -37,6 +37,7 @@ func EvaluateHandler(w http.ResponseWriter, r *http.Request) {
 		"matches":      members, // list of {nexora_id, client_id}
 		"map_response": mapedRes,
 	}
+	fmt.Println(resp)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
 }

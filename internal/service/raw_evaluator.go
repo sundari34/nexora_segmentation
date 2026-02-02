@@ -292,7 +292,7 @@ func buildInCondition(column string, values []string) string {
 		return ""
 	}
 
-	return fmt.Sprintf(" WHERE %s IN (%s) ", column, strings.Join(escaped, ","))
+	return fmt.Sprintf(" AND %s IN (%s) ", column, strings.Join(escaped, ","))
 }
 
 func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, map[string]interface{}, error) {
@@ -445,12 +445,6 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, map[string]inter
 	if len(req.NexoraIDs) > 0 {
 		whereNonAggregateStatement = buildInCondition("np.nexora_id", req.NexoraIDs)
 	}
-
-	fmt.Println(len(groupWhere))
-	fmt.Println(len(groupHaving))
-	fmt.Println(len(groupWhere) > 0)
-	fmt.Println(len(groupHaving) > 0)
-	fmt.Println("((((((len(groupHaving) > 0))))))")
 
 	selectStatement := "SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender"
 	if req.Source == "campaign_service" {
