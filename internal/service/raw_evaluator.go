@@ -472,7 +472,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM ( %s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
 	}
 
-	count := 0
+	var count uint64
 	if req.IsNeedCount {
 		clientDBManager := db.NewClientDB()
 		clickhouseConn, err := clientDBManager.GetCHDB(req.ClientID, req.ProjectID)
