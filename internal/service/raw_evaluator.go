@@ -194,6 +194,8 @@ func getCHEquivalentOperator(op string) string {
 		return "<="
 	case "like", "contains":
 		return "like"
+	case "doesNotContain", "doesnotcontain":
+		return "not like"
 	default:
 		return ""
 	}
