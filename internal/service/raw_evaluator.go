@@ -476,6 +476,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	if req.IsNeedCount {
 		clientDBManager := db.NewClientDB()
 		clickhouseConn, err := clientDBManager.GetCHDB(req.ClientID, req.ProjectID)
+		fmt.Println(countStatement)
+		fmt.Println("((((countStatement))))")
 		row := clickhouseConn.QueryRow(context.Background(), countStatement)
 
 		// Scan the value into the variable
