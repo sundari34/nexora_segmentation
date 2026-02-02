@@ -155,7 +155,7 @@ func handleTypedRule(
 
 	if *scope == "user" {
 		cp := getCustomerProfileEquivalentField(r.Field)
-		if op == "like" {
+		if op == "like" || op == "not like" {
 			*having = append(*having,
 				fmt.Sprintf("%s %s '%%%v%%'", cp, op, r.Value),
 			)
