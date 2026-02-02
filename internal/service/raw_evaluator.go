@@ -487,7 +487,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		}
 
 	}
-
+	fmt.Println(overallSelectStatement)
+	fmt.Println("(((((((overallSelectStatement)))))))")
 	query := map[string]string{
 		"where_statement":               finalWhere,
 		"join_statement":                joinStatement,
