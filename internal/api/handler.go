@@ -27,6 +27,7 @@ func EvaluateHandler(w http.ResponseWriter, r *http.Request) {
 
 	mapedRes, err := service.EvaluteRaw(req)
 	if err != nil {
+		fmt.Println(err)
 		http.Error(w, "evaluation failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
