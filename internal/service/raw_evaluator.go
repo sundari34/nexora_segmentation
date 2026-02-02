@@ -41,10 +41,11 @@ func getTimeConditionsTyped(tc *models.TimeCondition) string {
 
 	var days int
 	var err error
-	if tc.Value.Str != nil {
-		days, err = daysFromNow(*tc.Value.Str)
-	} else {
-		days = int(*tc.Value.Num)
+	switch v := tc.Value.(type) {
+	case string:
+		days, err = daysFromNow(v)
+	case float64:
+		// do nothing
 	}
 	if err != nil && op != "between" {
 		fmt.Println(fmt.Errorf("invalid date format: %v", err))

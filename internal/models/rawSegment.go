@@ -50,10 +50,10 @@ type Rule struct {
 }
 
 type TimeCondition struct {
-	Operator  string         `json:"operator"`
-	Value     StringOrNumber `json:"value,omitempty"`
-	StartDate string         `json:"start_date,omitempty"`
-	EndDate   string         `json:"end_date,omitempty"`
+	Operator  string `json:"operator"`
+	Value     any    `json:"value,omitempty"`
+	StartDate string `json:"start_date,omitempty"`
+	EndDate   string `json:"end_date,omitempty"`
 }
 
 type CountCondition struct {
