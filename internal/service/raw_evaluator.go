@@ -166,7 +166,7 @@ func handleTypedRule(
 		}
 	} else {
 		ev := getEventsEquivalentField(r.Field)
-		if op == "like" {
+		if op == "like" || op == "not like" {
 			*where = append(*where,
 				fmt.Sprintf("%s %s '%%%v%%'", ev, op, r.Value),
 			)
