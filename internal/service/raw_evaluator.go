@@ -295,7 +295,7 @@ func buildInCondition(column string, values []string) string {
 	return fmt.Sprintf(" AND %s IN (%s) ", column, strings.Join(escaped, ","))
 }
 
-func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, map[string]interface{}, error) {
+func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	groupCondition := strings.ToUpper(req.GroupCondition)
 	if groupCondition == "" {
 		groupCondition = "AND"
@@ -472,7 +472,7 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, map[string]inter
 		// Scan the value into the variable
 		err = row.Scan(&count)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get count: %v", err)
+			return nil, fmt.Errorf("failed to get count: %v", err)
 		}
 
 	}
@@ -488,7 +488,7 @@ func EvaluteRaw(req models.SegmentNewPayload) ([]models.Member, map[string]inter
 		"overall_statement":             overallSelectStatement,
 	}
 
-	return nil, map[string]interface{}{
+	return map[string]interface{}{
 		"query": query,
 		"count": count,
 	}, nil

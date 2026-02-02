@@ -25,18 +25,13 @@ func EvaluateHandler(w http.ResponseWriter, r *http.Request) {
 	// 	req.SegmentID = sid
 	// }
 
-	members, mapedRes, err := service.EvaluteRaw(req)
+	mapedRes, err := service.EvaluteRaw(req)
 	if err != nil {
 		http.Error(w, "evaluation failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	resp := map[string]any{
-		// "segment_id": req.SegmentID,
-		"count":        len(members),
-		"matches":      members, // list of {nexora_id, client_id}
-		"map_response": mapedRes,
-	}
+	resp := mapedRes
 	fmt.Println(resp)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
