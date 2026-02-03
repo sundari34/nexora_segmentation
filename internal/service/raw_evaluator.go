@@ -453,9 +453,6 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	selectStatement := "SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender"
 	if req.Source == "campaign_service" {
 		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, coalesce( nullIf(JSONExtractString(argMaxMerge(cp.user_properties_state), '%s'), ''), 'default') AS property", req.Property)
-
-		// add wher condion in nonaggrement stateme
-		whereNonAggregateStatement = "where cp.id != NULL"
 	}
 
 	// check nexora_ids in condition
@@ -463,7 +460,11 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	fmt.Println("((((((((req.NexoraIDs))))))))")
 	if len(req.NexoraIDs) > 0 {
 		fmt.Println("------------- inside ===============")
-		whereNonAggregateStatement += buildInCondition("np.nexora_id", req.NexoraIDs)
+		whereNonAggregateStatement = buildInCondition("np.nexora_id", req.NexoraIDs)
+		// condtion from live campaing servie
+		if req.Source == "campaign_service" {
+			whereNonAggregateStatement = strings.Replace(whereNonAggregateStatement, "AND", "WHERE", 1)
+		}
 		fmt.Println(whereNonAggregateStatement)
 		fmt.Println("((((((whereNonAggregateStatement))))))")
 	}
