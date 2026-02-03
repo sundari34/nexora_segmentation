@@ -464,12 +464,12 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		finalWhere = "WHERE " + strings.Join(groupWhere, " "+groupCondition+" ")
 		withStatement = fmt.Sprintf("WITH event_users AS (SELECT DISTINCT ev.nexora_id FROM events ev INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id %s)", finalWhere)
 		joinStatement = "event_users eu INNER JOIN nexora_profiles_latest np ON eu.nexora_id = np.nexora_id INNER JOIN customer_profiles_latest cp ON np.customer_profile_id = cp.id"
-		overallSelectStatement = fmt.Sprintf("%s %s from %s %s group by cp.id %s order by customer_profile_id %s", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
-		countStatement = fmt.Sprintf("%s SELECT COUNT(*) AS total_count FROM (%s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
+		overallSelectStatement = fmt.Sprintf("%s %s from %s %s group by cp.id %s order by cp.id %s", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
+		countStatement = fmt.Sprintf("%s SELECT COUNT(*) AS total_count FROM (%s from %s %s group by cp.id %s order by cp.id %s) as sub", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
 	} else {
 		joinStatement = "customer_profiles_latest cp LEFT JOIN nexora_profiles_latest np ON cp.id = np.customer_profile_id"
-		overallSelectStatement = fmt.Sprintf("%s from %s %s group by cp.id %s order by customer_profile_id %s as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
-		countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM ( %s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
+		overallSelectStatement = fmt.Sprintf("%s from %s %s group by cp.id %s order by cp.id %s as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
+		countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM ( %s from %s %s group by cp.id %s order by cp.id %s) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
 	}
 
 	var count uint64
