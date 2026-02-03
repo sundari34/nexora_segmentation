@@ -450,17 +450,20 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		finalHaving = ""
 	}
 
+	selectStatement := "SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender"
+	if req.Source == "campaign_service" {
+		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, coalesce( nullIf(JSONExtractString(argMaxMerge(cp.user_properties_state), '%s'), ''), 'default') AS property", req.Property)
+
+		// add wher condion in nonaggrement stateme
+		whereNonAggregateStatement = "where cp.id != NULL"
+	}
+
 	// check nexora_ids in condition
 	fmt.Println(req.NexoraIDs)
 	fmt.Println("((((((((req.NexoraIDs))))))))")
 	if len(req.NexoraIDs) > 0 {
 		fmt.Println("------------- inside ===============")
 		whereNonAggregateStatement = buildInCondition("np.nexora_id", req.NexoraIDs)
-	}
-
-	selectStatement := "SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender"
-	if req.Source == "campaign_service" {
-		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, coalesce( nullIf(JSONExtractString(argMaxMerge(cp.user_properties_state), '%s'), ''), 'default') AS property", req.Property)
 	}
 	// check fot where
 	if len(groupWhere) > 0 {
