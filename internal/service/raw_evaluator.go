@@ -463,7 +463,9 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	fmt.Println("((((((((req.NexoraIDs))))))))")
 	if len(req.NexoraIDs) > 0 {
 		fmt.Println("------------- inside ===============")
-		whereNonAggregateStatement = buildInCondition("np.nexora_id", req.NexoraIDs)
+		whereNonAggregateStatement += buildInCondition("np.nexora_id", req.NexoraIDs)
+		fmt.Println(whereNonAggregateStatement)
+		fmt.Println("((((((whereNonAggregateStatement))))))")
 	}
 	// check fot where
 	if len(groupWhere) > 0 {
