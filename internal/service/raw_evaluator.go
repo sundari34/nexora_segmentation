@@ -312,6 +312,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 
 	groupWhere := []string{}
 	groupHaving := []string{}
+	// append project_id_state in groupWhere
+	groupWhere = append(groupWhere, fmt.Sprintf("cp.project_id_state = '%s'", req.ProjectID))
 
 	for _, group := range req.Groups {
 		whereClauses := []string{}
