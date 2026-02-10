@@ -487,6 +487,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		whereNonAggregateStatement += fmt.Sprintf("AND cp.project_id = '%s'", req.ProjectID)
 		fmt.Println(whereNonAggregateStatement)
 		fmt.Println("((((((whereNonAggregateStatement))))))")
+	} else {
+		whereNonAggregateStatement = fmt.Sprintf("WHERE cp.project_id = '%s'", req.ProjectID)
 	}
 	// check fot where
 	if len(groupWhere) > 0 {
