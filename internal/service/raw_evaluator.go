@@ -330,8 +330,6 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 
 	groupWhere := []string{}
 	groupHaving := []string{}
-	// append project_id_state in groupWhere
-	groupWhere = append(groupWhere, fmt.Sprintf("cp.project_id_state = '%s'", req.ProjectID))
 
 	for _, group := range req.Groups {
 		whereClauses := []string{}
@@ -485,6 +483,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		if req.Source == "campaign_service" {
 			whereNonAggregateStatement = strings.Replace(whereNonAggregateStatement, "AND", "WHERE", 1)
 		}
+		// add project_id condition
+		whereNonAggregateStatement += fmt.Sprintf("AND cp.project_id = '%s'", req.ProjectID)
 		fmt.Println(whereNonAggregateStatement)
 		fmt.Println("((((((whereNonAggregateStatement))))))")
 	}
