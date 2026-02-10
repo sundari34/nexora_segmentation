@@ -163,9 +163,19 @@ func handleTypedRule(
 	if *scope == "user" {
 		cp := getCustomerProfileEquivalentField(r.Field)
 		if op == "like" || op == "not like" {
-			*having = append(*having,
-				fmt.Sprintf("%s %s '%%%v%%'", cp, op, r.Value),
-			)
+			if strings.ToLower(r.Operator) == "beginswith" || strings.ToLower(r.Operator) == "doesnotendwith" {
+				*having = append(*having,
+					fmt.Sprintf("%s %s '%v%%'", cp, op, r.Value),
+				)
+			} else if strings.ToLower(r.Operator) == "endswith" || strings.ToLower(r.Operator) == "doesnotbeginwith" {
+				*having = append(*having,
+					fmt.Sprintf("%s %s '%%%v'", cp, op, r.Value),
+				)
+			} else {
+				*having = append(*having,
+					fmt.Sprintf("%s %s '%%%v%%'", cp, op, r.Value),
+				)
+			}
 		} else {
 			*having = append(*having,
 				fmt.Sprintf("%s %s '%v'", cp, op, r.Value),
@@ -203,6 +213,14 @@ func getCHEquivalentOperator(op string) string {
 		return "like"
 	case "doesNotContain", "doesnotcontain":
 		return "not like"
+	case "null":
+		return "is null"
+	case "notNull":
+		return "is not null"
+	case "beginswith":
+		return "like"
+	case "endswith":
+		return "like"
 	default:
 		return ""
 	}
