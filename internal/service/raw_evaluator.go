@@ -580,7 +580,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 
 	selectStatement := "SELECT cp.id AS customer_profile_id, argMaxMerge(cp.nexora_id_state) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.name_state) AS name, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.client_id_state) AS client_id, argMaxMerge(cp.user_properties_state) AS user_properties, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender"
 	if req.Source == "campaign_service" {
-		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, argMaxMerge(cp.nexora_id_state) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.name_state) AS name, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.user_properties_state) AS user_properties, coalesce( nullIf(JSONExtractString(argMaxMerge(cp.user_properties_state), '%s'), ''), 'default') AS property", req.Property)
+		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, argMaxMerge(cp.nexora_id_state) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.name_state) AS name, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.client_id_state) AS client_idargMaxMerge(cp.user_properties_state) AS user_properties, coalesce( nullIf(JSONExtractString(argMaxMerge(cp.user_properties_state), '%s'), ''), 'default') AS property", req.Property)
 	}
 
 	// check nexora_ids in condition
@@ -603,7 +603,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		finalWhere = "WHERE " + strings.Join(groupWhere, " "+groupCondition+" ")
 		withStatement = fmt.Sprintf("WITH event_users AS (SELECT DISTINCT ev.nexora_id FROM events ev INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id %s)", finalWhere)
 		joinStatement = "event_users eu INNER JOIN cp_resolved cp ON eu.nexora_id = cp.nexora_id"
-		overallSelectStatement = fmt.Sprintf("%s, cp_resolved AS (%s from customer_profiles_latest cp %s group by cp.id %s) select * from %s order by customer_profile_id %s", withStatement, selectStatement, whereNonAggregateStatement, finalHaving, joinStatement, limitAndOffsets)
+		overallSelectStatement = fmt.Sprintf("%s, cp_resolved AS (%s from customer_profiles_latest cp %s group by cp.id %s) select cp.nexora_id as nexora_id, cp.customer_profile_id, cp.email, cp.mobile, cp.name, cp.project_id, cp.client_id, cp.user_properties, cp.property from %s order by customer_profile_id %s", withStatement, selectStatement, whereNonAggregateStatement, finalHaving, joinStatement, limitAndOffsets)
 		countStatement = fmt.Sprintf("%s, cp_resolved AS (%s from customer_profiles_latest cp %s group by cp.id %s) select COUNT(*) AS total_count FROM %s %s", withStatement, selectStatement, whereNonAggregateStatement, finalHaving, joinStatement, limitAndOffsets)
 
 	} else {
