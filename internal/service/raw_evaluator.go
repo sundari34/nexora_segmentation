@@ -564,6 +564,9 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	joinStatement := ""
 	overallSelectStatement := ""
 	limitAndOffsets := ""
+	if req.LimitStatement != "" {
+		limitAndOffsets = req.LimitStatement
+	}
 	withStatement := ""
 	countStatement := ""
 	whereNonAggregateStatement := ""

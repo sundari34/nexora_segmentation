@@ -14,6 +14,7 @@ type SegmentNewPayload struct {
 	IsNeedSQL      bool           `json:"need_sql,omitempty"`
 	IsNeedValue    bool           `json:"need_value,omitempty"`
 	Source         string         `json:"source"`
+	LimitStatement string         `json:"limit_statement"`
 }
 
 type RuleGroupRaw struct {
