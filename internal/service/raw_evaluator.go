@@ -215,11 +215,9 @@ func getCHEquivalentOperator(op string) string {
 		return "not like"
 	case "null":
 		return "is null"
-	case "notNull":
+	case "notnull":
 		return "is not null"
-	case "beginswith":
-		return "like"
-	case "endswith":
+	case "beginswith", "doesnotendwith", "endswith", "doesnotbeginwith":
 		return "like"
 	default:
 		return ""
