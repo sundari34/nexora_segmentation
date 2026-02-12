@@ -597,7 +597,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	if len(groupWhere) > 0 {
 		finalWhere = "WHERE " + strings.Join(groupWhere, " "+groupCondition+" ")
 		withStatement = fmt.Sprintf("WITH event_users AS (SELECT DISTINCT ev.nexora_id FROM events ev INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id %s)", finalWhere)
-		joinStatement = "event_users eu INNER JOIN customer_profiles_latest cp ON eu.nexora_id = cp.nexora_id"
+		joinStatement = "event_users eu INNER JOIN cp_resolved cp ON eu.nexora_id = cp.nexora_id"
 		if includeAnonymouseUsers == "yes" {
 			overallSelectStatement = fmt.Sprintf("%s %s from %s %s group by cp.id %s order by customer_profile_id %s as sub", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
 			countStatement = fmt.Sprintf("%s SELECT COUNT(*) AS total_count FROM (%s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
