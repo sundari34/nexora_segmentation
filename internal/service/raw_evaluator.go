@@ -166,7 +166,7 @@ func handleTypedRule(
 	where *[]string,
 	having *[]string,
 	scope *string,
-	includeAnonymouseUsers string,
+	includeAnonymouseUsers *string,
 ) {
 	op := getCHEquivalentOperator(r.Operator)
 
@@ -181,7 +181,7 @@ func handleTypedRule(
 
 	if isNegativeSemantic(op, r.Value) {
 		fmt.Println("Inside negative semantic ............")
-		includeAnonymouseUsers = "yes"
+		*includeAnonymouseUsers = "yes"
 	}
 
 	if *scope == "user" {
@@ -461,7 +461,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 					having := []string{}
 					field := ""
 					for _, r := range ec.Query.Rules {
-						handleTypedRule(r, &where, &having, &field, includeAnonymouseUsers)
+						handleTypedRule(r, &where, &having, &field, &includeAnonymouseUsers)
 					}
 					if len(where) > 0 {
 						whereClauses = append(
@@ -521,7 +521,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 					having := []string{}
 					field := "user"
 					for _, r := range up.UserPropertyQuery.Rules {
-						handleTypedRule(r, &where, &having, &field, includeAnonymouseUsers)
+						handleTypedRule(r, &where, &having, &field, &includeAnonymouseUsers)
 					}
 					if len(where) > 0 {
 						whereClauses = append(
