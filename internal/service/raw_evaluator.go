@@ -176,16 +176,10 @@ func handleTypedRule(
 					fmt.Sprintf("%s %s '%%%v%%'", cp, op, r.Value),
 				)
 			}
-			// check for null and is not null
-			if strings.ToLower(r.Operator) == "null" {
-				*having = append(*having,
-					fmt.Sprintf("%s %s", cp, op),
-				)
-			} else if strings.ToLower(r.Operator) == "notnull" {
-				*having = append(*having,
-					fmt.Sprintf("%s %s", cp, op),
-				)
-			}
+		} else if op == "is null" || op == "is not null" {
+			*having = append(*having,
+				fmt.Sprintf("%s %s", cp, op),
+			)
 		} else {
 			*having = append(*having,
 				fmt.Sprintf("%s %s '%v'", cp, op, r.Value),
