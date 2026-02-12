@@ -161,31 +161,30 @@ func handleTypedRule(
 		return
 	}
 
+	if isNegativeSemantic(op, r.Value) {
+		includeAnonymouseUsers = "yes"
+	}
+
 	if *scope == "user" {
+
 		cp := getCustomerProfileEquivalentField(r.Field)
 		opLower := strings.ToLower(op)
 
-		// helper to wrap negative conditions
-		wrapNegative := func(cond string) string {
-			if opLower == "not in" || opLower == "not like" || opLower == "!=" {
-				includeAnonymouseUsers = "yes"
-				return fmt.Sprintf("(%s OR cp.id = 0)", cond)
-			}
-			return cond
-		}
-
 		if opLower == "like" || opLower == "not like" {
-			var cond string
 
 			if strings.ToLower(r.Operator) == "beginswith" || strings.ToLower(r.Operator) == "doesnotendwith" {
-				cond = fmt.Sprintf("%s %s '%v%%'", cp, op, r.Value)
+				*having = append(*having,
+					fmt.Sprintf("%s %s '%v%%'", cp, op, r.Value),
+				)
 			} else if strings.ToLower(r.Operator) == "endswith" || strings.ToLower(r.Operator) == "doesnotbeginwith" {
-				cond = fmt.Sprintf("%s %s '%%%v'", cp, op, r.Value)
+				*having = append(*having,
+					fmt.Sprintf("%s %s '%%%v'", cp, op, r.Value),
+				)
 			} else {
-				cond = fmt.Sprintf("%s %s '%%%v%%'", cp, op, r.Value)
+				*having = append(*having,
+					fmt.Sprintf("%s %s '%%%v%%'", cp, op, r.Value),
+				)
 			}
-
-			*having = append(*having, wrapNegative(cond))
 
 		} else if opLower == "is null" || opLower == "is not null" {
 
@@ -209,14 +208,16 @@ func handleTypedRule(
 			}
 
 			values := strings.Join(valuesArr, ", ")
-			cond := fmt.Sprintf("%s %s (%v)", cp, op, values)
 
-			*having = append(*having, wrapNegative(cond))
+			*having = append(*having,
+				fmt.Sprintf("%s %s (%v)", cp, op, values),
+			)
 
 		} else {
 
-			cond := fmt.Sprintf("%s %s '%v'", cp, op, r.Value)
-			*having = append(*having, wrapNegative(cond))
+			*having = append(*having,
+				fmt.Sprintf("%s %s '%v'", cp, op, r.Value),
+			)
 		}
 
 	} else {
@@ -262,6 +263,7 @@ func handleTypedRule(
 			}
 
 			values := strings.Join(valuesArr, ", ")
+
 			*where = append(*where,
 				fmt.Sprintf("%s %s (%v)", ev, op, values),
 			)
