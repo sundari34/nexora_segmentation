@@ -162,6 +162,12 @@ func handleTypedRule(
 
 	if *scope == "user" {
 		cp := getCustomerProfileEquivalentField(r.Field)
+		fmt.Println(cp)
+		fmt.Println("(((cp)))")
+		fmt.Println(r.Operator)
+		fmt.Println("(((r.Operator)))")
+		fmt.Println(cp)
+		fmt.Println("(((cp)))")
 		if op == "like" || op == "not like" {
 			if strings.ToLower(r.Operator) == "beginswith" || strings.ToLower(r.Operator) == "doesnotendwith" {
 				*having = append(*having,
