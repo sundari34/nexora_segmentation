@@ -576,7 +576,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	}
 
 	selectStatement := "SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender"
-	annonymousUserStatement := "SELECT customer_profile_id, nexora_id, 'default' as gender FROM nexora_profiles_latest WHERE customer_profile_id = 0 GROUP BY nexora_id, customer_profile_id;"
+	annonymousUserStatement := "SELECT customer_profile_id, nexora_id, 'default' as gender FROM nexora_profiles_latest WHERE customer_profile_id = 0 GROUP BY nexora_id, customer_profile_id"
 	if req.Source == "campaign_service" {
 		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, coalesce( nullIf(JSONExtractString(argMaxMerge(cp.user_properties_state), '%s'), ''), 'default') AS property", req.Property)
 		annonymousUserStatement = "SELECT customer_profile_id, nexora_id, 'default' as property FROM nexora_profiles_latest WHERE customer_profile_id = 0 GROUP BY nexora_id, customer_profile_id;"
@@ -606,7 +606,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		joinStatement = "event_users eu INNER JOIN nexora_profiles_latest np ON eu.nexora_id = np.nexora_id INNER JOIN customer_profiles_latest cp ON np.customer_profile_id = cp.id"
 		if includeAnonymouseUsers == "yes" {
 			overallSelectStatement = fmt.Sprintf("%s select * from (%s from %s %s group by cp.id %s order by customer_profile_id %s union all %s) as sub", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets, annonymousUserStatement)
-			countStatement = fmt.Sprintf("%s SELECT COUNT(*) AS total_count FROM (%s from %s %s group by cp.id %s order by customer_profile_id %s union all %s) as sub", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets, annonymousUserStatement)
+			countStatement = fmt.Sprintf("%s SELECT COUNT(*) AS total_count FROM ( select * from (%s from %s %s group by cp.id %s order by customer_profile_id %s union all %s)) as sub", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets, annonymousUserStatement)
 		} else {
 			overallSelectStatement = fmt.Sprintf("%s %s from %s %s group by cp.id %s order by customer_profile_id %s", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
 			countStatement = fmt.Sprintf("%s SELECT COUNT(*) AS total_count FROM (%s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
@@ -617,8 +617,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		fmt.Println("((((((whereNonAggregateStatement))))))")
 		joinStatement = "customer_profiles_latest cp LEFT JOIN nexora_profiles_latest np ON cp.id = np.customer_profile_id"
 		if includeAnonymouseUsers == "yes" {
-			overallSelectStatement = fmt.Sprintf("(%s from %s %s group by cp.id %s order by customer_profile_id %s union all %s) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets, annonymousUserStatement)
-			countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM ( %s from %s %s group by cp.id %s order by customer_profile_id %s union all %s) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets, annonymousUserStatement)
+			overallSelectStatement = fmt.Sprintf("select * from (%s from %s %s group by cp.id %s order by customer_profile_id %s union all %s) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets, annonymousUserStatement)
+			countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM ( select * from (%s from %s %s group by cp.id %s order by customer_profile_id %s union all %s)) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets, annonymousUserStatement)
 		} else {
 			overallSelectStatement = fmt.Sprintf("%s from %s %s group by cp.id %s order by customer_profile_id %s as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
 			countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM ( %s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
