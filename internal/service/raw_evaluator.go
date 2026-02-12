@@ -575,48 +575,31 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		finalHaving = ""
 	}
 
-	selectStatement := "SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender"
+	selectStatement := "SELECT cp.id AS customer_profile_id, argMaxMerge(cp.nexora_id_state) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.name_state) AS name, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.client_id_state) AS client_id, argMaxMerge(cp.user_properties_state) AS user_properties, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender"
 	if req.Source == "campaign_service" {
-		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, any(np.nexora_id) AS nexora_id, coalesce( nullIf(JSONExtractString(argMaxMerge(cp.user_properties_state), '%s'), ''), 'default') AS property", req.Property)
+		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, argMaxMerge(cp.nexora_id_state) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.name_state) AS name, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.user_properties_state) AS user_properties, argMaxMerge(cp.user_properties_state) AS user_properties, coalesce( nullIf(JSONExtractString(argMaxMerge(cp.user_properties_state), '%s'), ''), 'default') AS property", req.Property)
 	}
 
 	// check nexora_ids in condition
-	fmt.Println(req.NexoraIDs)
-	fmt.Println("((((((((req.NexoraIDs))))))))")
 	if len(req.NexoraIDs) > 0 {
-		fmt.Println("------------- inside ===============")
 		whereNonAggregateStatement = buildInCondition("np.nexora_id", req.NexoraIDs)
 		// condtion from live campaing servie
 		if req.Source == "campaign_service" {
 			whereNonAggregateStatement = strings.Replace(whereNonAggregateStatement, "AND", "WHERE", 1)
 		}
-		fmt.Println(whereNonAggregateStatement)
-		fmt.Println("((((((whereNonAggregateStatement))))))")
 	}
 	// check fot where
 	if len(groupWhere) > 0 {
 		finalWhere = "WHERE " + strings.Join(groupWhere, " "+groupCondition+" ")
 		withStatement = fmt.Sprintf("WITH event_users AS (SELECT DISTINCT ev.nexora_id FROM events ev INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id %s)", finalWhere)
 		joinStatement = "event_users eu INNER JOIN cp_resolved cp ON eu.nexora_id = cp.nexora_id"
-		if includeAnonymouseUsers == "yes" {
-			overallSelectStatement = fmt.Sprintf("%s %s from %s %s group by cp.id %s order by customer_profile_id %s as sub", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
-			countStatement = fmt.Sprintf("%s SELECT COUNT(*) AS total_count FROM (%s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
-		} else {
-			overallSelectStatement = fmt.Sprintf("%s %s from %s %s group by cp.id %s order by customer_profile_id %s", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
-			countStatement = fmt.Sprintf("%s SELECT COUNT(*) AS total_count FROM (%s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", withStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
-		}
+		overallSelectStatement = fmt.Sprintf("%s, cp_resolved AS %s from customer_profiles_latest cp %s group by cp.id %s) select * from %s order by customer_profile_id %s", withStatement, selectStatement, whereNonAggregateStatement, finalHaving, joinStatement, limitAndOffsets)
+		countStatement = fmt.Sprintf("%s SELECT COUNT(*) AS total_count FROM (%s from customer_profiles_latest cp %s group by cp.id %s) select * from %s order by customer_profile_id %s) as sub", withStatement, selectStatement, whereNonAggregateStatement, finalHaving, joinStatement, limitAndOffsets)
 
 	} else {
-		fmt.Println(whereNonAggregateStatement)
-		fmt.Println("((((((whereNonAggregateStatement))))))")
 		joinStatement = "customer_profiles_latest cp"
-		if includeAnonymouseUsers == "yes" {
-			overallSelectStatement = fmt.Sprintf("(%s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
-			countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM ( %s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
-		} else {
-			overallSelectStatement = fmt.Sprintf("%s from %s %s group by cp.id %s order by customer_profile_id %s", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
-			countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM ( %s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
-		}
+		overallSelectStatement = fmt.Sprintf("%s from %s %s group by cp.id %s order by customer_profile_id %s", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
+		countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM ( %s from %s %s group by cp.id %s order by customer_profile_id %s) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
 	}
 
 	var count uint64
