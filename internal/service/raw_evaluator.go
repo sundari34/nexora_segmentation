@@ -143,6 +143,24 @@ func getCountConditionsTyped(cc *models.CountCondition) string {
 	}
 }
 
+func isNegativeSemantic(op string, val interface{}) bool {
+	op = strings.ToLower(strings.TrimSpace(op))
+
+	switch op {
+	case "not in", "not like", "!=", "is null", "is not null":
+		return true
+	}
+
+	// empty string checks
+	if s, ok := val.(string); ok {
+		if (op == "=" || op == "!=") && s == "" {
+			return true
+		}
+	}
+
+	return false
+}
+
 func handleTypedRule(
 	r models.Rule,
 	where *[]string,
