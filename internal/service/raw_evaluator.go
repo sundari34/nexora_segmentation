@@ -162,58 +162,68 @@ func handleTypedRule(
 
 	if *scope == "user" {
 		cp := getCustomerProfileEquivalentField(r.Field)
-		fmt.Println(cp)
-		fmt.Println("(((cp)))")
-		fmt.Println(r.Operator)
-		fmt.Println("(((r.Operator)))")
-		fmt.Println(cp)
-		fmt.Println("(((cp)))")
-		if op == "like" || op == "not like" {
-			if strings.ToLower(r.Operator) == "beginswith" || strings.ToLower(r.Operator) == "doesnotendwith" {
-				*having = append(*having,
-					fmt.Sprintf("%s %s '%v%%'", cp, op, r.Value),
-				)
-			} else if strings.ToLower(r.Operator) == "endswith" || strings.ToLower(r.Operator) == "doesnotbeginwith" {
-				*having = append(*having,
-					fmt.Sprintf("%s %s '%%%v'", cp, op, r.Value),
-				)
-			} else {
-				*having = append(*having,
-					fmt.Sprintf("%s %s '%%%v%%'", cp, op, r.Value),
-				)
+		opLower := strings.ToLower(op)
+
+		// helper to wrap negative conditions
+		wrapNegative := func(cond string) string {
+			if opLower == "not in" || opLower == "not like" || opLower == "!=" {
+				return fmt.Sprintf("(%s OR cp.id = 0)", cond)
 			}
-		} else if op == "is null" || op == "is not null" {
+			return cond
+		}
+
+		if opLower == "like" || opLower == "not like" {
+			var cond string
+
+			if strings.ToLower(r.Operator) == "beginswith" || strings.ToLower(r.Operator) == "doesnotendwith" {
+				cond = fmt.Sprintf("%s %s '%v%%'", cp, op, r.Value)
+			} else if strings.ToLower(r.Operator) == "endswith" || strings.ToLower(r.Operator) == "doesnotbeginwith" {
+				cond = fmt.Sprintf("%s %s '%%%v'", cp, op, r.Value)
+			} else {
+				cond = fmt.Sprintf("%s %s '%%%v%%'", cp, op, r.Value)
+			}
+
+			*having = append(*having, wrapNegative(cond))
+
+		} else if opLower == "is null" || opLower == "is not null" {
+
 			*having = append(*having,
 				fmt.Sprintf("%s %s", cp, op),
 			)
-		} else if op == "in" || op == "not in" {
+
+		} else if opLower == "in" || opLower == "not in" {
+
 			var valuesArr []string
 
 			switch v := r.Value.(type) {
 			case []string:
-				valuesArr = v
+				for _, val := range v {
+					valuesArr = append(valuesArr, fmt.Sprintf("'%v'", val))
+				}
 			case string:
 				valuesArr = []string{fmt.Sprintf("'%v'", v)}
 			default:
-				// optional: handle other types or return error
 				valuesArr = []string{fmt.Sprintf("'%v'", v)}
 			}
 
 			values := strings.Join(valuesArr, ", ")
-			*having = append(*having,
-				fmt.Sprintf("%s %s (%v)", cp, op, values),
-			)
+			cond := fmt.Sprintf("%s %s (%v)", cp, op, values)
+
+			*having = append(*having, wrapNegative(cond))
+
 		} else {
-			*having = append(*having,
-				fmt.Sprintf("%s %s '%v'", cp, op, r.Value),
-			)
+
+			cond := fmt.Sprintf("%s %s '%v'", cp, op, r.Value)
+			*having = append(*having, wrapNegative(cond))
 		}
+
 	} else {
+
 		ev := getEventsEquivalentField(r.Field)
-		if op == "like" || op == "not like" {
-			// *where = append(*where,
-			// 	fmt.Sprintf("%s %s '%%%v%%'", ev, op, r.Value),
-			// )
+		opLower := strings.ToLower(op)
+
+		if opLower == "like" || opLower == "not like" {
+
 			if strings.ToLower(r.Operator) == "beginswith" || strings.ToLower(r.Operator) == "doesnotendwith" {
 				*where = append(*where,
 					fmt.Sprintf("%s %s '%v%%'", ev, op, r.Value),
@@ -227,20 +237,25 @@ func handleTypedRule(
 					fmt.Sprintf("%s %s '%%%v%%'", ev, op, r.Value),
 				)
 			}
-		} else if op == "is null" || op == "is not null" {
+
+		} else if opLower == "is null" || opLower == "is not null" {
+
 			*where = append(*where,
 				fmt.Sprintf("%s %s", ev, op),
 			)
-		} else if op == "in" || op == "not in" {
+
+		} else if opLower == "in" || opLower == "not in" {
+
 			var valuesArr []string
 
 			switch v := r.Value.(type) {
 			case []string:
-				valuesArr = v
+				for _, val := range v {
+					valuesArr = append(valuesArr, fmt.Sprintf("'%v'", val))
+				}
 			case string:
 				valuesArr = []string{fmt.Sprintf("'%v'", v)}
 			default:
-				// optional: handle other types or return error
 				valuesArr = []string{fmt.Sprintf("'%v'", v)}
 			}
 
@@ -248,7 +263,9 @@ func handleTypedRule(
 			*where = append(*where,
 				fmt.Sprintf("%s %s (%v)", ev, op, values),
 			)
+
 		} else {
+
 			*where = append(*where,
 				fmt.Sprintf("%s %s '%v'", ev, op, r.Value),
 			)
