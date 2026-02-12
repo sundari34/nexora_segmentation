@@ -601,7 +601,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		withStatement = fmt.Sprintf("WITH event_users AS (SELECT DISTINCT ev.nexora_id FROM events ev INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id %s)", finalWhere)
 		joinStatement = "event_users eu INNER JOIN cp_resolved cp ON eu.nexora_id = cp.nexora_id"
 		overallSelectStatement = fmt.Sprintf("%s, cp_resolved AS (%s from customer_profiles_latest cp %s group by cp.id %s) select * from %s order by customer_profile_id %s", withStatement, selectStatement, whereNonAggregateStatement, finalHaving, joinStatement, limitAndOffsets)
-		countStatement = fmt.Sprintf("%s cp_resolved AS (%s from customer_profiles_latest cp %s group by cp.id %s) select COUNT(*) AS total_count FROM %s order by customer_profile_id %s", withStatement, selectStatement, whereNonAggregateStatement, finalHaving, joinStatement, limitAndOffsets)
+		countStatement = fmt.Sprintf("%s, cp_resolved AS (%s from customer_profiles_latest cp %s group by cp.id %s) select COUNT(*) AS total_count FROM %s order by customer_profile_id %s", withStatement, selectStatement, whereNonAggregateStatement, finalHaving, joinStatement, limitAndOffsets)
 
 	} else {
 		joinStatement = "customer_profiles_latest cp"
