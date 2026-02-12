@@ -582,10 +582,17 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 
 	// check nexora_ids in condition
 	if len(req.NexoraIDs) > 0 {
-		whereNonAggregateStatement = buildInCondition("np.nexora_id", req.NexoraIDs)
-		// condtion from live campaing servie
-		if req.Source == "campaign_service" {
-			whereNonAggregateStatement = strings.Replace(whereNonAggregateStatement, "AND", "WHERE", 1)
+		// whereNonAggregateStatement = buildInCondition("np.nexora_id", req.NexoraIDs)
+		// // condtion from live campaing servie
+		// if req.Source == "campaign_service" {
+		// 	whereNonAggregateStatement = strings.Replace(whereNonAggregateStatement, "AND", "WHERE", 1)
+		// }
+		nexoraIn := buildInCondition("argMaxMerge(cp.nexora_id_state)", req.NexoraIDs)
+		if finalHaving == "" {
+			strings.Replace(nexoraIn, "AND", "HAVING", 1)
+			finalHaving = nexoraIn
+		} else {
+			finalHaving += nexoraIn
 		}
 	}
 	// check fot where
