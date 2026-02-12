@@ -193,10 +193,10 @@ func handleTypedRule(
 			case []string:
 				valuesArr = v
 			case string:
-				valuesArr = []string{v}
+				valuesArr = []string{fmt.Sprintf("'%v'", v)}
 			default:
 				// optional: handle other types or return error
-				valuesArr = []string{fmt.Sprintf("%v", v)}
+				valuesArr = []string{fmt.Sprintf("'%v'", v)}
 			}
 
 			values := strings.Join(valuesArr, ", ")
@@ -238,10 +238,10 @@ func handleTypedRule(
 			case []string:
 				valuesArr = v
 			case string:
-				valuesArr = []string{v}
+				valuesArr = []string{fmt.Sprintf("'%v'", v)}
 			default:
 				// optional: handle other types or return error
-				valuesArr = []string{fmt.Sprintf("%v", v)}
+				valuesArr = []string{fmt.Sprintf("'%v'", v)}
 			}
 
 			values := strings.Join(valuesArr, ", ")
