@@ -186,6 +186,23 @@ func handleTypedRule(
 			*having = append(*having,
 				fmt.Sprintf("%s %s", cp, op),
 			)
+		} else if op == "in" || op == "not in" {
+			var valuesArr []string
+
+			switch v := r.Value.(type) {
+			case []string:
+				valuesArr = v
+			case string:
+				valuesArr = []string{v}
+			default:
+				// optional: handle other types or return error
+				valuesArr = []string{fmt.Sprintf("%v", v)}
+			}
+
+			values := strings.Join(valuesArr, ", ")
+			*having = append(*having,
+				fmt.Sprintf("%s %s (%v)", cp, op, values),
+			)
 		} else {
 			*having = append(*having,
 				fmt.Sprintf("%s %s '%v'", cp, op, r.Value),
@@ -194,8 +211,42 @@ func handleTypedRule(
 	} else {
 		ev := getEventsEquivalentField(r.Field)
 		if op == "like" || op == "not like" {
+			// *where = append(*where,
+			// 	fmt.Sprintf("%s %s '%%%v%%'", ev, op, r.Value),
+			// )
+			if strings.ToLower(r.Operator) == "beginswith" || strings.ToLower(r.Operator) == "doesnotendwith" {
+				*where = append(*where,
+					fmt.Sprintf("%s %s '%v%%'", ev, op, r.Value),
+				)
+			} else if strings.ToLower(r.Operator) == "endswith" || strings.ToLower(r.Operator) == "doesnotbeginwith" {
+				*where = append(*where,
+					fmt.Sprintf("%s %s '%%%v'", ev, op, r.Value),
+				)
+			} else {
+				*where = append(*where,
+					fmt.Sprintf("%s %s '%%%v%%'", ev, op, r.Value),
+				)
+			}
+		} else if op == "is null" || op == "is not null" {
 			*where = append(*where,
-				fmt.Sprintf("%s %s '%%%v%%'", ev, op, r.Value),
+				fmt.Sprintf("%s %s", ev, op),
+			)
+		} else if op == "in" || op == "not in" {
+			var valuesArr []string
+
+			switch v := r.Value.(type) {
+			case []string:
+				valuesArr = v
+			case string:
+				valuesArr = []string{v}
+			default:
+				// optional: handle other types or return error
+				valuesArr = []string{fmt.Sprintf("%v", v)}
+			}
+
+			values := strings.Join(valuesArr, ", ")
+			*where = append(*where,
+				fmt.Sprintf("%s %s (%v)", ev, op, values),
 			)
 		} else {
 			*where = append(*where,
@@ -223,6 +274,10 @@ func getCHEquivalentOperator(op string) string {
 		return "like"
 	case "doesNotContain", "doesnotcontain":
 		return "not like"
+	case "in":
+		return "in"
+	case "notin":
+		return "not in"
 	case "null":
 		return "is null"
 	case "notnull":
