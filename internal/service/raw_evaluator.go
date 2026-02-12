@@ -180,6 +180,7 @@ func handleTypedRule(
 	}
 
 	if isNegativeSemantic(op, r.Value) {
+		fmt.Println("Inside negative semantic ............")
 		includeAnonymouseUsers = "yes"
 	}
 
@@ -584,6 +585,10 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	// check nexora_ids in condition
 	fmt.Println(req.NexoraIDs)
 	fmt.Println("((((((((req.NexoraIDs))))))))")
+
+	// check the anonymous user condition
+	fmt.Println(includeAnonymouseUsers)
+	fmt.Println("(((((((((includeAnonymouseUsers)))))))))")
 	if len(req.NexoraIDs) > 0 {
 		fmt.Println("------------- inside ===============")
 		whereNonAggregateStatement = buildInCondition("np.nexora_id", req.NexoraIDs)
