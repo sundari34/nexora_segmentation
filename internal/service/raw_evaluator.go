@@ -609,7 +609,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 			selectStatement += ", argMax(updated_at, id) AS updated_at"
 		}
 		joinStatement = "event_users eu INNER JOIN cp_resolved cp ON eu.nexora_id = cp.nexora_id"
-		overallSelectStatement = fmt.Sprintf("%s, cp_resolved AS (%s) select cp.nexora_id as nexora_id, cp.customer_profile_id, cp.external_user_id, cp.email, cp.mobile, cp.name, cp.project_id, cp.client_id, cp.user_properties, cp.property from %s order by customer_profile_id %s", withStatement, selectStatement, joinStatement, limitAndOffsets)
+		overallSelectStatement = fmt.Sprintf("%s, cp_resolved AS (%s) select cp.customer_profile_id, cp.external_user_id, cp.nexora_id as nexora_id, cp.email, cp.mobile, cp.name, cp.project_id, cp.client_id, cp.user_properties, cp.property from %s order by customer_profile_id %s", withStatement, selectStatement, joinStatement, limitAndOffsets)
 		countStatement = fmt.Sprintf("%s, cp_resolved AS (%s) select COUNT(*) AS total_count FROM %s %s", withStatement, selectStatement, joinStatement, limitAndOffsets)
 		if req.Source != "campaign_service" {
 			countStatement += ", argMax(updated_at, id) AS updated_at"
