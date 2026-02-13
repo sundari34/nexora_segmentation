@@ -578,8 +578,11 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		finalHaving = ""
 	}
 
+	outerSelectStatement := "SELECT argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) as external_user_id, nexora_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(gender, id) AS gender FROM "
+
 	selectStatement := "SELECT cp.id AS customer_profile_id, cp.external_user_id as external_user_id, argMaxMerge(cp.nexora_id_state) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.name_state) AS name, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.client_id_state) AS client_id, argMaxMerge(cp.user_properties_state) AS user_properties, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender"
 	if req.Source == "campaign_service" {
+		outerSelectStatement = "SELECT argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) as external_user_id, nexora_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(property, id) AS property FROM "
 		selectStatement = fmt.Sprintf("SELECT cp.id AS customer_profile_id, cp.external_user_id as external_user_id, argMaxMerge(cp.nexora_id_state) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.name_state) AS name, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.client_id_state) AS client_id, argMaxMerge(cp.user_properties_state) AS user_properties, coalesce( nullIf(JSONExtractString(argMaxMerge(cp.user_properties_state), '%s'), ''), 'default') AS property", req.Property)
 	}
 
@@ -608,8 +611,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 
 	} else {
 		joinStatement = "customer_profiles_latest cp"
-		overallSelectStatement = fmt.Sprintf("%s from %s %s group by cp.id, cp.external_user_id %s order by customer_profile_id %s", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
-		countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM ( %s from %s %s group by cp.id, cp.external_user_id %s %s) as sub", selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
+		overallSelectStatement = fmt.Sprintf("%s ( %s from %s %s group by cp.id, cp.external_user_id %s ) GROUP BY nexora_id order by customer_profile_id %s", outerSelectStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
+		countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM ( %s ( %s from %s %s group by cp.id, cp.external_user_id %s ) GROUP BY nexora_id %s) as sub", outerSelectStatement, selectStatement, joinStatement, whereNonAggregateStatement, finalHaving, limitAndOffsets)
 	}
 
 	var count uint64
