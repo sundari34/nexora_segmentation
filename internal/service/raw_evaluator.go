@@ -206,11 +206,15 @@ func handleTypedRule(
 			}
 
 		} else if opLower == "is null" || opLower == "is not null" {
+			condition := fmt.Sprintf("(%s IS NULL OR %s = '' OR %s = '0' OR LOWER(%s) = 'none')",
+				cp, cp, cp, cp)
 
-			*having = append(*having,
-				fmt.Sprintf("%s %s", cp, op),
-			)
+			if opLower == "is not null" {
+				condition = fmt.Sprintf("(%s IS NOT NULL AND %s != '' AND %s != '0' AND LOWER(%s) != 'none')",
+					cp, cp, cp, cp)
+			}
 
+			*having = append(*having, condition)
 		} else if opLower == "in" || opLower == "not in" {
 
 			var valuesArr []string
@@ -261,11 +265,15 @@ func handleTypedRule(
 			}
 
 		} else if opLower == "is null" || opLower == "is not null" {
+			condition := fmt.Sprintf("(%s IS NULL OR %s = '' OR %s = '0' OR LOWER(%s) = 'none')",
+				ev, ev, ev, ev)
 
-			*where = append(*where,
-				fmt.Sprintf("%s %s", ev, op),
-			)
+			if opLower == "is not null" {
+				condition = fmt.Sprintf("(%s IS NOT NULL AND %s != '' AND %s != '0' AND LOWER(%s) != 'none')",
+					ev, ev, ev, ev)
+			}
 
+			*where = append(*where, condition)
 		} else if opLower == "in" || opLower == "not in" {
 
 			var valuesArr []string
