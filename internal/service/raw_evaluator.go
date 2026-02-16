@@ -667,7 +667,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		selectStatement = `SELECT 
         cp.customer_profile_id, 
         cp.external_user_id, 
-        cp.nexora_id, 
+        cp.nexora_id as nexora_id, 
         cp.email, 
         cp.mobile, 
         cp.name, 
@@ -781,9 +781,9 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	if req.IsNeedCount {
 		clientDBManager := db.NewClientDB()
 		clickhouseConn, err := clientDBManager.GetCHDB(req.ClientID, req.ProjectID)
-		fmt.Println(countStatement)
-		fmt.Println("((((countStatement))))")
-		row := clickhouseConn.QueryRow(context.Background(), countStatement)
+		fmt.Println(countOverallStatement)
+		fmt.Println("((((countOverallStatement))))")
+		row := clickhouseConn.QueryRow(context.Background(), countOverallStatement)
 
 		// Scan the value into the variable
 		err = row.Scan(&count)
@@ -794,8 +794,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	}
 	fmt.Println(overallSelectStatement)
 	fmt.Println("(((((((overallSelectStatement)))))))")
-	fmt.Println(countStatement)
-	fmt.Println("((((countStatement))))")
+	fmt.Println(countOverallStatement)
+	fmt.Println("((((countOverallStatement))))")
 	query := map[string]string{
 		"where_statement":               finalWhere,
 		"join_statement":                joinStatement,
