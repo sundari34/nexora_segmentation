@@ -586,6 +586,25 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		profileWhere = "WHERE " + strings.Join(groupHaving, " "+groupCondition+" ")
 	}
 
+	selectColumns := []string{
+		"customer_profile_id",
+		"external_user_id",
+		"nexora_id",
+		"email",
+		"mobile",
+		"name",
+		"project_id",
+		"client_id",
+		"user_properties",
+		"property",
+	}
+
+	if req.Source != "campaign_service" {
+		selectColumns = append(selectColumns, "updated_at")
+	}
+
+	selectStatement = fmt.Sprintf("SELECT \n        %s\n    FROM", strings.Join(selectColumns, ",\n        "))
+
 	// Handle nexora_id filtering
 	if len(req.NexoraIDs) > 0 {
 		nexoraIn := buildInCondition("nexora_id", req.NexoraIDs)
@@ -664,19 +683,19 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
         %s
     )`, finalWhere, req.Property, req.ProjectID, cpFilteredWhere)
 
-		selectStatement = `SELECT 
-        cp.customer_profile_id, 
-        cp.external_user_id, 
-        cp.nexora_id as nexora_id, 
-        cp.email, 
-        cp.mobile, 
-        cp.name, 
-        cp.project_id, 
-        cp.client_id, 
-        cp.user_properties, 
-        cp.property,
-        cp.updated_at
-    FROM`
+		// 	selectStatement = `SELECT
+		//     customer_profile_id,
+		//     external_user_id,
+		//     nexora_id,
+		//     email,
+		//     mobile,
+		//     name,
+		//     project_id,
+		//     client_id,
+		//     user_properties,
+		//     property,
+		//     updated_at
+		// FROM`
 
 		joinStatement = "event_users eu INNER JOIN cp_filtered cp ON eu.nexora_id = cp.nexora_id"
 		overallSelectStatement = fmt.Sprintf("%s %s %s ORDER BY updated_at DESC NULLS LAST %s", withStatement, selectStatement, joinStatement, limitAndOffsets)
@@ -692,19 +711,19 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 			outerWhere = "WHERE project_id = '" + req.ProjectID + "'"
 		}
 
-		selectStatement = `SELECT 
-        customer_profile_id, 
-        external_user_id, 
-        nexora_id, 
-        email, 
-        mobile, 
-        name, 
-        project_id, 
-        client_id, 
-        user_properties, 
-        property,
-        updated_at
-    FROM`
+		// 	selectStatement = fmt.Sprintf(`SELECT
+		//     customer_profile_id,
+		//     external_user_id,
+		//     nexora_id,
+		//     email,
+		//     mobile,
+		//     name,
+		//     project_id,
+		//     client_id,
+		//     user_properties,
+		//     property,
+		//     updated_at
+		// FROM`)
 
 		joinStatement = fmt.Sprintf(`(
         SELECT 
