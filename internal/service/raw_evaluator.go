@@ -351,22 +351,22 @@ func getCustomerProfileEquivalentField(field string) string {
 	// Known argMax state columns
 	switch field {
 	case "email":
-		return "cp.email"
+		return "email"
 	case "mobile":
-		return "cp.mobile"
+		return "mobile"
 	case "name":
-		return "cp.name"
+		return "name"
 	case "client_id":
-		return "cp.client_id"
+		return "client_id"
 	case "project_id":
-		return "cp.project_id"
+		return "project_id"
 	case "updated_at":
-		return "cp.updated_at"
+		return "updated_at"
 	}
 
 	// Dynamic JSON fields from user_properties_state
 	return fmt.Sprintf(
-		"JSONExtractString(argMaxMerge(cp.user_properties), '%s')",
+		"JSONExtractString(user_properties, '%s')",
 		field,
 	)
 }
