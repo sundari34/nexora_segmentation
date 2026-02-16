@@ -576,6 +576,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	}
 	withStatement := ""
 	countStatement := ""
+	countOverallStatement := ""
 	whereNonAggregateStatement := ""
 	selectStatement := ""
 
@@ -678,10 +679,9 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
     FROM`
 
 		joinStatement = "event_users eu INNER JOIN cp_filtered cp ON eu.nexora_id = cp.nexora_id"
-
 		overallSelectStatement = fmt.Sprintf("%s %s %s ORDER BY updated_at DESC NULLS LAST %s", withStatement, selectStatement, joinStatement, limitAndOffsets)
-
-		countStatement = fmt.Sprintf("%s SELECT COUNT(*) AS total_count FROM %s", withStatement, joinStatement)
+		countStatement = "SELECT COUNT(*) AS total_count FROM"
+		countOverallStatement = fmt.Sprintf("%s %s %s", withStatement, countStatement, joinStatement)
 
 	} else {
 		// WITHOUT EVENT CONDITIONS
@@ -702,7 +702,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
         project_id, 
         client_id, 
         user_properties, 
-        property
+        property,
+        updated_at
     FROM`
 
 		joinStatement = fmt.Sprintf(`(
@@ -716,7 +717,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
             argMax(project_id, id) AS project_id, 
             argMax(client_id, id) AS client_id, 
             argMax(user_properties, id) AS user_properties, 
-            argMax(property, id) AS property 
+            argMax(property, id) AS property, 
+            argMax(updated_at, id) AS updated_at 
         FROM (
             SELECT 
                 cp.id, 
@@ -728,7 +730,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
                 argMaxMerge(cp.project_id_state) AS project_id, 
                 argMaxMerge(cp.client_id_state) AS client_id, 
                 argMaxMerge(cp.user_properties_state) AS user_properties, 
-                JSONExtractString(argMaxMerge(cp.user_properties_state), '%s') AS property 
+                JSONExtractString(argMaxMerge(cp.user_properties_state), '%s') AS property, 
+                argMaxMerge(cp.updated_at_state) AS updated_at 
             FROM customer_profiles_latest cp  
             GROUP BY cp.id, cp.external_user_id 
             HAVING argMaxMerge(cp.project_id_state) = '%s'
@@ -737,8 +740,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
     ) AS resolved %s`, req.Property, req.ProjectID, outerWhere)
 
 		overallSelectStatement = fmt.Sprintf("%s %s ORDER BY customer_profile_id %s", selectStatement, joinStatement, limitAndOffsets)
-
-		countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM %s", joinStatement)
+		countStatement = "SELECT COUNT(*) AS total_count FROM"
+		countOverallStatement = fmt.Sprintf("%s %s", countStatement, joinStatement)
 	}
 
 	// outerSelectStatement := "SELECT argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) as external_user_id, nexora_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(gender, id) AS gender FROM "
@@ -800,6 +803,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		"select_statement":              selectStatement,
 		"with_statement":                withStatement,
 		"count_statement":               countStatement,
+		"count_overall_statement":       countOverallStatement,
 		"where_non_aggregate_statement": whereNonAggregateStatement,
 		"overall_statement":             overallSelectStatement,
 		"include_anonymous_users":       includeAnonymouseUsers,
