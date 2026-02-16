@@ -612,13 +612,13 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		}
 		finalWhere = "WHERE " + strings.Join(groupWhere, " "+groupCondition+" ")
 		withStatement = fmt.Sprintf("WITH event_users AS (SELECT DISTINCT ev.nexora_id FROM events ev INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id %s), cp_base AS (%s from customer_profiles_latest cp %s group by cp.id, cp.external_user_id having argMaxMerge(cp.project_id_state) = '%s')", finalWhere, withSelectStatement, whereNonAggregateStatement, req.ProjectID)
-		selectStatement := fmt.Sprintf("SELECT nexora_id, argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) AS external_user_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(property, id) AS property FROM cp_base GROUP BY nexora_id %s", finalHaving)
+		selectStatement := fmt.Sprintf("SELECT nexora_id, argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) AS external_user_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(property, id) AS property FROM cp_base GROUP BY nexora_id")
 		if req.Source != "campaign_service" {
 			selectStatement += ", argMax(updated_at, id) AS updated_at"
 		}
 		joinStatement = "event_users eu INNER JOIN cp_resolved cp ON eu.nexora_id = cp.nexora_id"
-		overallSelectStatement = fmt.Sprintf("%s, cp_resolved AS (%s) select cp.customer_profile_id, cp.external_user_id, cp.nexora_id as nexora_id, cp.email, cp.mobile, cp.name, cp.project_id, cp.client_id, cp.user_properties, cp.property from %s order by customer_profile_id %s", withStatement, selectStatement, joinStatement, limitAndOffsets)
-		countStatement = fmt.Sprintf("%s, cp_resolved AS (%s) select COUNT(*) AS total_count FROM %s %s", withStatement, selectStatement, joinStatement, limitAndOffsets)
+		overallSelectStatement = fmt.Sprintf("%s, cp_resolved AS (%s), cp_filtered  as (select cp.customer_profile_id, cp.external_user_id, cp.nexora_id as nexora_id, cp.email, cp.mobile, cp.name, cp.project_id, cp.client_id, cp.user_properties, cp.property where (project_id = %s) %s) select cp.customer_profile_id, cp.external_user_id, cp.nexora_id as nexora_id, cp.email, cp.mobile, cp.name, cp.project_id, cp.client_id, cp.user_properties, cp.property from %s order by customer_profile_id %s", withStatement, selectStatement, req.ProjectID, finalHaving, joinStatement, limitAndOffsets)
+		countStatement = fmt.Sprintf("%s, cp_resolved AS (%s), cp_filtered  as (select cp.customer_profile_id, cp.external_user_id, cp.nexora_id as nexora_id, cp.email, cp.mobile, cp.name, cp.project_id, cp.client_id, cp.user_properties, cp.property where (project_id = %s) %s) select COUNT(*) AS total_count FROM %s %s", withStatement, selectStatement, req.ProjectID, finalHaving, joinStatement, limitAndOffsets)
 		if req.Source != "campaign_service" {
 			countStatement += ", argMax(updated_at, id) AS updated_at"
 		}
