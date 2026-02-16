@@ -568,7 +568,6 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	}
 
 	finalWhere := ""
-	profileWhere := ""
 	joinStatement := ""
 	overallSelectStatement := ""
 	limitAndOffsets := ""
@@ -583,18 +582,6 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	profileFilterWhere := ""
 	if len(groupProfileWhere) > 0 {
 		profileFilterWhere = "WHERE " + strings.Join(groupProfileWhere, " "+groupCondition+" ")
-	}
-
-	// For HAVING clause in cp_base - only project_id filter
-	profileWhere = fmt.Sprintf("HAVING argMaxMerge(cp.project_id_state) = '%s'", req.ProjectID)
-
-	outerSelectStatement := "SELECT argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) as external_user_id, nexora_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(gender, id) AS gender FROM "
-
-	selectStatement := "SELECT cp.id, cp.external_user_id, argMaxMerge(cp.nexora_id_state) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.name_state) AS name, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.client_id_state) AS client_id, argMaxMerge(cp.user_properties_state) AS user_properties, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender"
-
-	if req.Source == "campaign_service" {
-		outerSelectStatement = "SELECT argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) as external_user_id, nexora_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(property, id) AS property FROM "
-		selectStatement = fmt.Sprintf("SELECT cp.id, cp.external_user_id, argMaxMerge(cp.nexora_id_state) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.name_state) AS name, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.client_id_state) AS client_id, argMaxMerge(cp.user_properties_state) AS user_properties, coalesce(nullIf(JSONExtractString(argMaxMerge(cp.user_properties_state), '%s'), ''), 'default') AS property", req.Property)
 	}
 
 	// Handle nexora_id filtering in WHERE clause for outer query
@@ -656,26 +643,22 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		joinStatement = "customer_profiles_latest cp"
 
 		// Inner query with only project_id filter in HAVING
-		innerQuery := fmt.Sprintf("SELECT cp.id, cp.external_user_id, argMaxMerge(cp.nexora_id_state) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.name_state) AS name, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.client_id_state) AS client_id, argMaxMerge(cp.user_properties_state) AS user_properties, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender FROM %s %s GROUP BY cp.id, cp.external_user_id HAVING argMaxMerge(cp.project_id_state) = '%s'", joinStatement, whereNonAggregateStatement, req.ProjectID)
-
+		var innerQuery string
 		if req.Source == "campaign_service" {
 			innerQuery = fmt.Sprintf("SELECT cp.id, cp.external_user_id, argMaxMerge(cp.nexora_id_state) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.name_state) AS name, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.client_id_state) AS client_id, argMaxMerge(cp.user_properties_state) AS user_properties, coalesce(nullIf(JSONExtractString(argMaxMerge(cp.user_properties_state), '%s'), ''), 'default') AS property FROM %s %s GROUP BY cp.id, cp.external_user_id HAVING argMaxMerge(cp.project_id_state) = '%s'", req.Property, joinStatement, whereNonAggregateStatement, req.ProjectID)
+		} else {
+			innerQuery = fmt.Sprintf("SELECT cp.id, cp.external_user_id, argMaxMerge(cp.nexora_id_state) AS nexora_id, argMaxMerge(cp.email_state) AS email, argMaxMerge(cp.mobile_state) AS mobile, argMaxMerge(cp.name_state) AS name, argMaxMerge(cp.project_id_state) AS project_id, argMaxMerge(cp.client_id_state) AS client_id, argMaxMerge(cp.user_properties_state) AS user_properties, JSONExtractString(argMaxMerge(cp.user_properties_state), 'gender') AS gender FROM %s %s GROUP BY cp.id, cp.external_user_id HAVING argMaxMerge(cp.project_id_state) = '%s'", joinStatement, whereNonAggregateStatement, req.ProjectID)
 		}
 
-		// Outer query that applies profile filters AFTER resolution
-		overallSelectStatement = fmt.Sprintf("SELECT customer_profile_id, external_user_id, nexora_id, email, mobile, name, project_id, client_id, user_properties, gender FROM (SELECT argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) AS external_user_id, nexora_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(gender, id) AS gender FROM (%s) GROUP BY nexora_id) AS resolved %s%s ORDER BY customer_profile_id %s", innerQuery, profileFilterWhere, nexoraFilterWhere, limitAndOffsets)
-
+		// Build resolved query and apply filters
 		if req.Source == "campaign_service" {
 			overallSelectStatement = fmt.Sprintf("SELECT customer_profile_id, external_user_id, nexora_id, email, mobile, name, project_id, client_id, user_properties, property FROM (SELECT argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) AS external_user_id, nexora_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(property, id) AS property FROM (%s) GROUP BY nexora_id) AS resolved %s%s ORDER BY customer_profile_id %s", innerQuery, profileFilterWhere, nexoraFilterWhere, limitAndOffsets)
-		}
-
-		countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM (SELECT argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) AS external_user_id, nexora_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(gender, id) AS gender FROM (%s) GROUP BY nexora_id) AS resolved %s%s", innerQuery, profileFilterWhere, nexoraFilterWhere)
-
-		if req.Source == "campaign_service" {
 			countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM (SELECT argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) AS external_user_id, nexora_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(property, id) AS property FROM (%s) GROUP BY nexora_id) AS resolved %s%s", innerQuery, profileFilterWhere, nexoraFilterWhere)
+		} else {
+			overallSelectStatement = fmt.Sprintf("SELECT customer_profile_id, external_user_id, nexora_id, email, mobile, name, project_id, client_id, user_properties, gender FROM (SELECT argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) AS external_user_id, nexora_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(gender, id) AS gender FROM (%s) GROUP BY nexora_id) AS resolved %s%s ORDER BY customer_profile_id %s", innerQuery, profileFilterWhere, nexoraFilterWhere, limitAndOffsets)
+			countStatement = fmt.Sprintf("SELECT COUNT(*) AS total_count FROM (SELECT argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) AS external_user_id, nexora_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(gender, id) AS gender FROM (%s) GROUP BY nexora_id) AS resolved %s%s", innerQuery, profileFilterWhere, nexoraFilterWhere)
 		}
 	}
-
 	var count uint64
 	if req.IsNeedCount {
 		clientDBManager := db.NewClientDB()
@@ -696,10 +679,10 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	fmt.Println(countStatement)
 	fmt.Println("((((countStatement))))")
 	query := map[string]string{
-		"where_statement":               finalWhere,
-		"join_statement":                joinStatement,
-		"having_statement":              profileFilterWhere,
-		"select_statement":              selectStatement,
+		"where_statement":  finalWhere,
+		"join_statement":   joinStatement,
+		"having_statement": profileFilterWhere,
+		// "select_statement":              selectStatement,
 		"with_statement":                withStatement,
 		"count_statement":               countStatement,
 		"where_non_aggregate_statement": whereNonAggregateStatement,
