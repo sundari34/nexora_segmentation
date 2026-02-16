@@ -611,8 +611,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 			withSelectStatement += ", argMaxMerge(cp.updated_at_state) AS updated_at"
 		}
 		finalWhere = "WHERE " + strings.Join(groupWhere, " "+groupCondition+" ")
-		withStatement = fmt.Sprintf("WITH event_users AS (SELECT DISTINCT ev.nexora_id FROM events ev INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id %s), cp_base AS (%s from customer_profiles_latest cp %s group by cp.id, cp.external_user_id %s)", finalWhere, withSelectStatement, whereNonAggregateStatement, finalHaving)
-		selectStatement := "SELECT nexora_id, argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) AS external_user_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(property, id) AS property FROM cp_base GROUP BY nexora_id"
+		withStatement = fmt.Sprintf("WITH event_users AS (SELECT DISTINCT ev.nexora_id FROM events ev INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id %s), cp_base AS (%s from customer_profiles_latest cp %s group by cp.id, cp.external_user_id having argMaxMerge(cp.project_id_state) = '%s')", finalWhere, withSelectStatement, whereNonAggregateStatement, req.ProjectID)
+		selectStatement := fmt.Sprintf("SELECT nexora_id, argMax(id, id) AS customer_profile_id, argMax(external_user_id, id) AS external_user_id, argMax(email, id) AS email, argMax(mobile, id) AS mobile, argMax(name, id) AS name, argMax(project_id, id) AS project_id, argMax(client_id, id) AS client_id, argMax(user_properties, id) AS user_properties, argMax(property, id) AS property FROM cp_base GROUP BY nexora_id %s", finalHaving)
 		if req.Source != "campaign_service" {
 			selectStatement += ", argMax(updated_at, id) AS updated_at"
 		}
