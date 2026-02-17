@@ -633,23 +633,53 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
             AND ev.nexora_id = ed.nexora_id 
         %s
     ), 
-    cp_base AS (
-        SELECT 
-            cp.id, 
-            cp.external_user_id, 
-            argMaxMerge(cp.nexora_id_state) AS nexora_id, 
-            argMaxMerge(cp.email_state) AS email, 
-            argMaxMerge(cp.mobile_state) AS mobile, 
-            argMaxMerge(cp.name_state) AS name, 
-            argMaxMerge(cp.project_id_state) AS project_id, 
-            argMaxMerge(cp.client_id_state) AS client_id, 
-            argMaxMerge(cp.user_properties_state) AS user_properties, 
-            JSONExtractString(argMaxMerge(cp.user_properties_state), '%s') AS property, 
-            argMaxMerge(cp.updated_at_state) AS updated_at 
-        FROM customer_profiles_latest cp  
-        GROUP BY cp.id, cp.external_user_id 
-        HAVING argMaxMerge(cp.project_id_state) = '%s'
-    ), 
+    cp_base_with_id AS (
+    SELECT
+        cp.id,
+        cp.external_user_id,
+        argMaxMerge(cp.nexora_id_state)       AS nexora_id,
+        argMaxMerge(cp.email_state)           AS email,
+        argMaxMerge(cp.mobile_state)          AS mobile,
+        argMaxMerge(cp.name_state)            AS name,
+        argMaxMerge(cp.project_id_state)      AS project_id,
+        argMaxMerge(cp.client_id_state)       AS client_id,
+        argMaxMerge(cp.user_properties_state) AS user_properties,
+        JSONExtractString(argMaxMerge(cp.user_properties_state), '%s') AS property,
+        argMaxMerge(cp.updated_at_state)      AS updated_at
+    FROM customer_profiles_latest AS cp
+    WHERE cp.id != 0
+    GROUP BY cp.id, cp.external_user_id
+    HAVING argMaxMerge(cp.project_id_state) = '%s'
+),
+
+cp_base_no_id AS (
+    SELECT
+        cp.id,
+        cp.external_user_id,
+        -- ✅ finalize to get actual string value, use as group key
+        finalizeAggregation(cp.nexora_id_state)       AS nexora_id,
+        argMaxMerge(cp.email_state)                   AS email,
+        argMaxMerge(cp.mobile_state)                  AS mobile,
+        argMaxMerge(cp.name_state)                    AS name,
+        argMaxMerge(cp.project_id_state)              AS project_id,
+        argMaxMerge(cp.client_id_state)               AS client_id,
+        argMaxMerge(cp.user_properties_state)         AS user_properties,
+        JSONExtractString(argMaxMerge(cp.user_properties_state), '%s') AS property,
+        argMaxMerge(cp.updated_at_state)              AS updated_at
+    FROM customer_profiles_latest AS cp
+    WHERE cp.id = 0
+    GROUP BY
+        cp.id,
+        cp.external_user_id,
+        finalizeAggregation(cp.nexora_id_state)   -- ✅ each unique nexora_id = separate user
+    HAVING argMaxMerge(cp.project_id_state) = '%s'
+),
+
+cp_base AS (
+    SELECT * FROM cp_base_with_id
+    UNION ALL
+    SELECT * FROM cp_base_no_id
+), 
     cp_resolved AS (
         SELECT 
             nexora_id, 
@@ -681,7 +711,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
             cp.updated_at
         FROM cp_resolved cp 
         %s
-    )`, finalWhere, req.Property, req.ProjectID, cpFilteredWhere)
+    )`, finalWhere, req.Property, req.ProjectID, req.Property, req.ProjectID, cpFilteredWhere)
 
 		// 	selectStatement = `SELECT
 		//     customer_profile_id,
