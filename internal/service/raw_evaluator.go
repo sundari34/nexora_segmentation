@@ -770,23 +770,47 @@ cp_base AS (
             argMax(updated_at, id) AS updated_at 
         FROM (
             SELECT 
-                cp.id, 
-                cp.external_user_id, 
-                argMaxMerge(cp.nexora_id_state) AS nexora_id, 
-                argMaxMerge(cp.email_state) AS email, 
-                argMaxMerge(cp.mobile_state) AS mobile, 
-                argMaxMerge(cp.name_state) AS name, 
-                argMaxMerge(cp.project_id_state) AS project_id, 
-                argMaxMerge(cp.client_id_state) AS client_id, 
-                argMaxMerge(cp.user_properties_state) AS user_properties, 
-                JSONExtractString(argMaxMerge(cp.user_properties_state), '%s') AS property, 
-                argMaxMerge(cp.updated_at_state) AS updated_at 
-            FROM customer_profiles_latest cp  
-            GROUP BY cp.id, cp.external_user_id 
-            HAVING argMaxMerge(cp.project_id_state) = '%s'
+            cp.id, 
+            cp.external_user_id, 
+            argMaxMerge(cp.nexora_id_state)       AS nexora_id, 
+            argMaxMerge(cp.email_state)           AS email, 
+            argMaxMerge(cp.mobile_state)          AS mobile, 
+            argMaxMerge(cp.name_state)            AS name, 
+            argMaxMerge(cp.project_id_state)      AS project_id, 
+            argMaxMerge(cp.client_id_state)       AS client_id, 
+            argMaxMerge(cp.user_properties_state) AS user_properties, 
+            JSONExtractString(argMaxMerge(cp.user_properties_state), '%s') AS property, 
+            argMaxMerge(cp.updated_at_state)      AS updated_at 
+        FROM customer_profiles_latest cp  
+        WHERE cp.id != 0
+        GROUP BY cp.id, cp.external_user_id 
+        HAVING argMaxMerge(cp.project_id_state) = '%s'
+
+        UNION ALL
+
+        -- ✅ anonymous users: each unique nexora_id = separate user
+        SELECT 
+            cp.id, 
+            cp.external_user_id, 
+            finalizeAggregation(cp.nexora_id_state)       AS nexora_id, 
+            argMaxMerge(cp.email_state)                   AS email, 
+            argMaxMerge(cp.mobile_state)                  AS mobile, 
+            argMaxMerge(cp.name_state)                    AS name, 
+            argMaxMerge(cp.project_id_state)              AS project_id, 
+            argMaxMerge(cp.client_id_state)               AS client_id, 
+            argMaxMerge(cp.user_properties_state)         AS user_properties, 
+            JSONExtractString(argMaxMerge(cp.user_properties_state), '%s') AS property, 
+            argMaxMerge(cp.updated_at_state)              AS updated_at 
+        FROM customer_profiles_latest cp  
+        WHERE cp.id = 0
+        GROUP BY
+            cp.id,
+            cp.external_user_id,
+            finalizeAggregation(cp.nexora_id_state)  -- ✅ each nexora_id unique row
+        HAVING argMaxMerge(cp.project_id_state) = '%s'
         ) 
         GROUP BY nexora_id
-    ) AS resolved %s`, req.Property, req.ProjectID, outerWhere)
+    ) AS resolved %s`, req.Property, req.ProjectID, req.Property, req.ProjectID, outerWhere)
 
 		overallSelectStatement = fmt.Sprintf("%s %s ORDER BY customer_profile_id %s", selectStatement, joinStatement, limitAndOffsets)
 		countStatement = "SELECT COUNT(*) AS total_count FROM"
