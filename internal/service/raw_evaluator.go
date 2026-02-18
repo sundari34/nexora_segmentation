@@ -451,7 +451,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		havingClauses := []string{}
 
 		for _, filter := range group.Filters {
-
+			innerFilterWhereClause := []string{}
+			innerFilterHavingClause := []string{}
 			switch filter.FilterCategory {
 
 			// ---------- EVENT ----------
@@ -472,8 +473,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 						handleTypedRule(r, &where, &having, &field, includeAnonymouseUsers)
 					}
 					if len(where) > 0 {
-						whereClauses = append(
-							whereClauses,
+						innerFilterWhereClause = append(
+							innerFilterWhereClause,
 							fmt.Sprintf("( %s )",
 								strings.Join(where, " "+strings.ToUpper(ec.Query.Combinator)+" "),
 							),
@@ -482,8 +483,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 					if len(having) > 0 {
 						fmt.Println(having)
 						fmt.Println("((((having))))")
-						havingClauses = append(
-							havingClauses,
+						innerFilterHavingClause = append(
+							innerFilterHavingClause,
 							fmt.Sprintf("( %s )",
 								strings.Join(having, " "+strings.ToUpper(ec.Query.Combinator)+" "),
 							),
@@ -498,7 +499,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 					fmt.Println(timeCondition)
 					fmt.Println("((((timeCondition))))")
 					if timeCondition != "" {
-						whereClauses = append(whereClauses, timeCondition)
+						innerFilterWhereClause = append(innerFilterWhereClause, timeCondition)
 					}
 				}
 
@@ -507,13 +508,13 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 					fmt.Println("Count condition")
 					countCondition := getCountConditionsTyped(ec.Count)
 					if countCondition != "" {
-						whereClauses = append(whereClauses, getCountConditionsTyped(ec.Count))
+						innerFilterWhereClause = append(innerFilterWhereClause, getCountConditionsTyped(ec.Count))
 					}
 				}
 
 				// event name
-				whereClauses = append(
-					whereClauses,
+				innerFilterWhereClause = append(
+					innerFilterWhereClause,
 					fmt.Sprintf("ed.event_name = '%s'", ec.EventName),
 				)
 
@@ -532,8 +533,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 						handleTypedRule(r, &where, &having, &field, includeAnonymouseUsers)
 					}
 					if len(where) > 0 {
-						whereClauses = append(
-							whereClauses,
+						innerFilterWhereClause = append(
+							innerFilterWhereClause,
 							fmt.Sprintf("( %s )",
 								strings.Join(where, " "+strings.ToUpper(up.UserPropertyQuery.Combinator)+" "),
 							),
@@ -542,14 +543,23 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 					if len(having) > 0 {
 						fmt.Println(having)
 						fmt.Println("((((having))))")
-						havingClauses = append(
-							havingClauses,
+						innerFilterHavingClause = append(
+							innerFilterHavingClause,
 							fmt.Sprintf("( %s )",
 								strings.Join(having, " "+strings.ToUpper(up.UserPropertyQuery.Combinator)+" "),
 							),
 						)
 					}
+
 				}
+			}
+			// append to where clause filter
+			if len(innerFilterWhereClause) > 0 {
+				whereClauses = append(whereClauses, fmt.Sprintf("( %s )", strings.Join(innerFilterWhereClause, " AND ")))
+			}
+			// append to where clause filter
+			if len(innerFilterHavingClause) > 0 {
+				havingClauses = append(havingClauses, fmt.Sprintf("( %s )", strings.Join(innerFilterHavingClause, " AND ")))
 			}
 		}
 
