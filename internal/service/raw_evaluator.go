@@ -556,13 +556,13 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		if len(whereClauses) > 0 {
 			groupWhere = append(
 				groupWhere,
-				strings.Join(whereClauses, " ( "+strings.ToUpper(group.MatchMode)+" ) "),
+				"( "+strings.Join(whereClauses, " "+strings.ToUpper(group.MatchMode)+" ")+" )",
 			)
 		}
 		if len(havingClauses) > 0 {
 			groupHaving = append(
 				groupHaving,
-				strings.Join(havingClauses, " "+strings.ToUpper(group.MatchMode)+" "),
+				"( "+strings.Join(havingClauses, " "+strings.ToUpper(group.MatchMode)+" ")+" )",
 			)
 		}
 	}
