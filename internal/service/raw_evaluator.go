@@ -545,7 +545,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 						fmt.Println("((((having))))")
 						innerFilterHavingClause = append(
 							innerFilterHavingClause,
-							fmt.Sprintf("( %s )",
+							fmt.Sprintf(" %s ",
 								strings.Join(having, " "+strings.ToUpper(up.UserPropertyQuery.Combinator)+" "),
 							),
 						)
