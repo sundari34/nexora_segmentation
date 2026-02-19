@@ -308,8 +308,7 @@ func cpResolutionCTEs(projectID, property string) string {
 	return fmt.Sprintf(`cp_base_with_id AS (
     SELECT
         cp.id,
-        cp.external_user_id,
-        argMaxMerge(cp.nexora_id_state)       AS nexora_id,
+        cp.external_user_id,nexora_id,
         argMaxMerge(cp.email_state)           AS email,
         argMaxMerge(cp.mobile_state)          AS mobile,
         argMaxMerge(cp.name_state)            AS name,
@@ -319,15 +318,14 @@ func cpResolutionCTEs(projectID, property string) string {
         JSONExtractString(argMaxMerge(cp.user_properties_state), '%s') AS property,
         argMaxMerge(cp.updated_at_state)      AS updated_at
     FROM customer_profiles_latest AS cp
-    WHERE cp.id != 0
+    WHERE cp.id != 0 and cp.external_user_id != 'none'
     GROUP BY cp.id, cp.external_user_id
     HAVING argMaxMerge(cp.project_id_state) = '%s'
 ),
 cp_base_no_id AS (
     SELECT
         cp.id,
-        cp.external_user_id,
-        finalizeAggregation(cp.nexora_id_state)       AS nexora_id,
+        cp.external_user_id,nexora_id,
         argMaxMerge(cp.email_state)                   AS email,
         argMaxMerge(cp.mobile_state)                  AS mobile,
         argMaxMerge(cp.name_state)                    AS name,
@@ -337,7 +335,7 @@ cp_base_no_id AS (
         JSONExtractString(argMaxMerge(cp.user_properties_state), '%s') AS property,
         argMaxMerge(cp.updated_at_state)              AS updated_at
     FROM customer_profiles_latest AS cp
-    WHERE cp.id = 0
+    WHERE cp.external_user_id = 'none'
     GROUP BY cp.id, cp.external_user_id, finalizeAggregation(cp.nexora_id_state)
     HAVING argMaxMerge(cp.project_id_state) = '%s'
 ),
