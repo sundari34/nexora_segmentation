@@ -346,7 +346,7 @@ cp_base AS (
 ),
 cp_resolved AS (
     SELECT
-        nexora_id,
+        argMax(nexora_id, id)               AS nexora_id,
         argMax(id, id)               AS customer_profile_id,
         argMax(external_user_id, id) AS external_user_id,
         argMax(email, id)            AS email,
