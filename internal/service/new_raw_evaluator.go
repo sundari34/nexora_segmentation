@@ -304,14 +304,23 @@ func buildInCondition(column string, values []string) string {
 	return fmt.Sprintf(" AND %s IN (%s) ", column, strings.Join(escaped, ","))
 }
 
-// ─── cp resolution CTE (single CTE, grouped by nexora_id) ───────────────────
+// ─── cp resolution CTE ───────────────────────────────────────────────────────
+// New schema: ORDER BY nexora_id, external_user_id is a state
+// Two levels:
+//   inner  → resolve *Merge states per nexora_id → flat row with identity_key
+//   outer  → GROUP BY identity_key to collapse same user across devices
 
 func cpResolutionCTEs(projectID, property string) string {
-	return fmt.Sprintf(`cp_resolved AS (
+	return fmt.Sprintf(`cp_inner AS (
     SELECT
         nexora_id,
-        max(id)                                                     AS customer_profile_id,
-        max(external_user_id)                                       AS external_user_id,
+        multiIf(
+            argMaxMerge(external_user_id_state) != 'none',
+            argMaxMerge(external_user_id_state),
+            nexora_id
+        )                                                           AS identity_key,
+        maxMerge(id_state)                                          AS id,
+        argMaxMerge(external_user_id_state)                         AS external_user_id,
         argMaxMerge(email_state)                                    AS email,
         argMaxMerge(mobile_state)                                   AS mobile,
         argMaxMerge(name_state)                                     AS name,
@@ -319,10 +328,28 @@ func cpResolutionCTEs(projectID, property string) string {
         argMaxMerge(client_id_state)                                AS client_id,
         argMaxMerge(user_properties_state)                          AS user_properties,
         JSONExtractString(argMaxMerge(user_properties_state), '%s') AS property,
+        maxMerge(version_state)                                     AS version,
         argMaxMerge(updated_at_state)                               AS updated_at
-    FROM customer_profiles_latest
+    FROM customer_profiles_latest final
     GROUP BY nexora_id
     HAVING argMaxMerge(project_id_state) = '%s'
+),
+cp_resolved AS (
+    SELECT
+        identity_key,
+        argMax(nexora_id, version)       AS nexora_id,
+        max(id)                          AS customer_profile_id,
+        argMax(external_user_id, version) AS external_user_id,
+        argMax(email, version)           AS email,
+        argMax(mobile, version)          AS mobile,
+        argMax(name, version)            AS name,
+        argMax(project_id, version)      AS project_id,
+        argMax(client_id, version)       AS client_id,
+        argMax(user_properties, version) AS user_properties,
+        argMax(property, version)        AS property,
+        max(updated_at)                  AS updated_at
+    FROM cp_inner
+    GROUP BY identity_key
 )`, property, projectID)
 }
 
@@ -336,7 +363,7 @@ type parsedGroup struct {
 	matchMode          string
 }
 
-// ─── build subquery for one group returning nexora_ids ───────────────────────
+// ─── build subquery for one group returning identity_keys ────────────────────
 
 func buildGroupSubquery(pg parsedGroup, projectID, property string) string {
 	hasEvents := len(pg.eventFilterClauses) > 0
@@ -372,12 +399,12 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
     WITH
     %s,
     cp_filtered AS (
-        SELECT nexora_id FROM cp_resolved
+        SELECT identity_key, nexora_id FROM cp_resolved
     ),
     event_users AS (
         %s
     )
-    SELECT eu.nexora_id FROM event_users eu
+    SELECT cp.identity_key FROM event_users eu
     INNER JOIN cp_filtered cp ON eu.nexora_id = cp.nexora_id
 )`, cpResolutionCTEs(projectID, property), eventBlock)
 }
@@ -391,7 +418,7 @@ func buildUserPropOnlyGroupSubquery(pg parsedGroup, projectID, property string) 
 	return fmt.Sprintf(`(
     WITH
     %s
-    SELECT nexora_id FROM cp_resolved
+    SELECT identity_key FROM cp_resolved
     %s
 )`, cpResolutionCTEs(projectID, property), whereClause)
 }
@@ -428,14 +455,14 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
     event_users AS (
         %s
     )
-    SELECT eu.nexora_id FROM event_users eu
+    SELECT cp.identity_key FROM event_users eu
     INNER JOIN cp_filtered cp ON eu.nexora_id = cp.nexora_id
 )`, cpResolutionCTEs(projectID, property), whereClause, eventBlock)
 }
 
 // ─── final SELECT ─────────────────────────────────────────────────────────────
 
-func buildFinalSelect(combinedNexoraIDs string, projectID, property string, req models.SegmentNewPayload) string {
+func buildFinalSelect(combinedIdentityKeys string, projectID, property string, req models.SegmentNewPayload) string {
 	selectColumns := []string{
 		"customer_profile_id", "external_user_id", "nexora_id",
 		"email", "mobile", "name", "project_id", "client_id",
@@ -452,16 +479,16 @@ func buildFinalSelect(combinedNexoraIDs string, projectID, property string, req 
 
 	return fmt.Sprintf(`WITH
 %s,
-combined_nexora_ids AS (
+combined_identity_keys AS (
     %s
 )
 SELECT %s
 FROM cp_resolved
-WHERE nexora_id IN (SELECT nexora_id FROM combined_nexora_ids)
+WHERE identity_key IN (SELECT identity_key FROM combined_identity_keys)
 ORDER BY updated_at DESC NULLS LAST
 %s`,
 		cpResolutionCTEs(projectID, property),
-		combinedNexoraIDs,
+		combinedIdentityKeys,
 		strings.Join(selectColumns, ", "),
 		limitAndOffsets,
 	)
@@ -562,26 +589,27 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		groupSubqueries = append(groupSubqueries, subquery)
 	}
 
-	var combinedNexoraIDs string
+	// Combine all group subqueries — now using identity_key instead of nexora_id
+	var combinedIdentityKeys string
 	if len(groupSubqueries) == 1 {
-		combinedNexoraIDs = fmt.Sprintf("SELECT nexora_id FROM %s", groupSubqueries[0])
+		combinedIdentityKeys = fmt.Sprintf("SELECT identity_key FROM %s", groupSubqueries[0])
 	} else {
 		parts := []string{}
 		for _, sq := range groupSubqueries {
-			parts = append(parts, fmt.Sprintf("SELECT nexora_id FROM %s", sq))
+			parts = append(parts, fmt.Sprintf("SELECT identity_key FROM %s", sq))
 		}
-		combinedNexoraIDs = strings.Join(parts, "\n    "+groupSetOp+"\n    ")
+		combinedIdentityKeys = strings.Join(parts, "\n    "+groupSetOp+"\n    ")
 	}
 
 	if len(req.NexoraIDs) > 0 {
-		inList := buildInCondition("nexora_id", req.NexoraIDs)
-		combinedNexoraIDs = fmt.Sprintf(
-			"SELECT nexora_id FROM (%s) AS grp_combined WHERE 1=1 %s",
-			combinedNexoraIDs, inList,
+		inList := buildInCondition("identity_key", req.NexoraIDs)
+		combinedIdentityKeys = fmt.Sprintf(
+			"SELECT identity_key FROM (%s) AS grp_combined WHERE 1=1 %s",
+			combinedIdentityKeys, inList,
 		)
 	}
 
-	overallSelectStatement := buildFinalSelect(combinedNexoraIDs, req.ProjectID, req.Property, req)
+	overallSelectStatement := buildFinalSelect(combinedIdentityKeys, req.ProjectID, req.Property, req)
 
 	countOverallStatement := fmt.Sprintf(
 		"SELECT COUNT(*) AS total_count FROM (%s) AS count_base",
