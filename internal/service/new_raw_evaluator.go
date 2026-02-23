@@ -462,7 +462,7 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
 
 // ─── final SELECT ─────────────────────────────────────────────────────────────
 
-func buildFinalSelect(combinedIdentityKeys string, projectID, property string, req models.SegmentNewPayload) string {
+func buildFinalSelect(combinedIdentityKeys string, projectID, property string, req models.SegmentNewPayload) map[string]string {
 	selectColumns := []string{
 		"customer_profile_id", "external_user_id", "nexora_id",
 		"email", "mobile", "name", "project_id", "client_id",
@@ -478,21 +478,38 @@ func buildFinalSelect(combinedIdentityKeys string, projectID, property string, r
 	}
 	fmt.Println(limitAndOffsets)
 	fmt.Println("(((((((((((((((limitAndOffsets)))))))))))))))")
-	return fmt.Sprintf(`WITH
-%s,
-combined_identity_keys AS (
-    %s
-)
-SELECT %s
-FROM cp_resolved
-WHERE identity_key IN (SELECT identity_key FROM combined_identity_keys)
-ORDER BY updated_at DESC NULLS LAST
-%s`,
+	selectStatement := fmt.Sprintf(`WITH
+		%s,
+		combined_identity_keys AS (
+			%s
+		)
+		SELECT %s
+		FROM cp_resolved
+		WHERE identity_key IN (SELECT identity_key FROM combined_identity_keys)
+		ORDER BY updated_at DESC NULLS LAST
+		%s`,
 		cpResolutionCTEs(projectID, property),
 		combinedIdentityKeys,
 		strings.Join(selectColumns, ", "),
 		limitAndOffsets,
 	)
+	countSelectStatement := fmt.Sprintf(`WITH
+		%s,
+		combined_identity_keys AS (
+			%s
+		)
+		SELECT %s
+		FROM cp_resolved
+		WHERE identity_key IN (SELECT identity_key FROM combined_identity_keys)`,
+		cpResolutionCTEs(projectID, property),
+		combinedIdentityKeys,
+		strings.Join(selectColumns, ", "),
+	)
+
+	return map[string]string{
+		"select": selectStatement,
+		"count":  countSelectStatement,
+	}
 }
 
 // ─── main entry point ─────────────────────────────────────────────────────────
@@ -614,7 +631,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 
 	countOverallStatement := fmt.Sprintf(
 		"SELECT COUNT(*) AS total_count FROM (%s) AS count_base",
-		overallSelectStatement,
+		overallSelectStatement["count"],
 	)
 
 	var count uint64
@@ -634,7 +651,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	fmt.Println("(((((groupSetOp)))))")
 
 	query := map[string]string{
-		"overall_statement":       overallSelectStatement,
+		"overall_statement":       overallSelectStatement["select"],
 		"count_overall_statement": countOverallStatement,
 		"group_set_operator":      groupSetOp,
 	}
