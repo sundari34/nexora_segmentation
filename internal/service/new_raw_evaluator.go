@@ -614,7 +614,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		// No segment groups
 		if len(req.NexoraIDs) > 0 {
 			// Only nexora_id filtering — no group conditions
-			inList := buildInCondition("identity_key", req.NexoraIDs)
+			inList := buildInCondition("nexora_id", req.NexoraIDs)
 			combinedIdentityKeys = fmt.Sprintf(
 				"SELECT identity_key FROM cp_resolved WHERE 1=1 %s",
 				inList,
@@ -631,7 +631,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		)
 		// Apply nexora_id filter on top if present
 		if len(req.NexoraIDs) > 0 {
-			inList := buildInCondition("identity_key", req.NexoraIDs)
+			inList := buildInCondition("nexora_id", req.NexoraIDs)
 			combinedIdentityKeys = fmt.Sprintf(
 				"SELECT identity_key FROM (%s) AS grp_filtered WHERE 1=1 %s",
 				combinedIdentityKeys, inList,
@@ -650,7 +650,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 
 		// Apply nexora_id filter on top if present
 		if len(req.NexoraIDs) > 0 {
-			inList := buildInCondition("identity_key", req.NexoraIDs)
+			inList := buildInCondition("nexora_id", req.NexoraIDs)
 			combinedIdentityKeys = fmt.Sprintf(
 				"SELECT identity_key FROM (%s) AS grp_filtered WHERE 1=1 %s",
 				combinedIdentityKeys, inList,
