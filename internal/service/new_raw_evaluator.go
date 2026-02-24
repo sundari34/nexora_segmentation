@@ -621,10 +621,17 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 
 	if len(req.NexoraIDs) > 0 {
 		inList := buildInCondition("identity_key", req.NexoraIDs)
-		combinedIdentityKeys = fmt.Sprintf(
-			"SELECT identity_key FROM (%s) AS grp_combined WHERE 1=1 %s",
-			combinedIdentityKeys, inList,
-		)
+		if combinedIdentityKeys != "" {
+			combinedIdentityKeys = fmt.Sprintf(
+				"SELECT identity_key FROM (%s) AS grp_combined WHERE 1=1 %s",
+				combinedIdentityKeys, inList,
+			)
+		} else {
+			combinedIdentityKeys = fmt.Sprintf(
+				"SELECT identity_key FROM cp_resolved WHERE 1=1 %s",
+				inList,
+			)
+		}
 	}
 
 	overallSelectStatement := buildFinalSelect(combinedIdentityKeys, req.ProjectID, req.Property, req)
