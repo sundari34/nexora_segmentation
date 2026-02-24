@@ -609,8 +609,14 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 
 	// Combine all group subqueries — now using identity_key instead of nexora_id
 	var combinedIdentityKeys string
-	if len(groupSubqueries) == 1 {
+
+	if len(groupSubqueries) == 0 {
+		// No segment groups — fetch all users for the project
+		combinedIdentityKeys = "SELECT nexora_id FROM cp_resolved"
+
+	} else if len(groupSubqueries) == 1 {
 		combinedIdentityKeys = fmt.Sprintf("SELECT identity_key FROM %s", groupSubqueries[0])
+
 	} else {
 		parts := []string{}
 		for _, sq := range groupSubqueries {
@@ -619,6 +625,7 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		combinedIdentityKeys = strings.Join(parts, "\n    "+groupSetOp+"\n    ")
 	}
 
+	// Apply optional nexora_id filtering
 	if len(req.NexoraIDs) > 0 {
 		inList := buildInCondition("identity_key", req.NexoraIDs)
 		if combinedIdentityKeys != "" {
