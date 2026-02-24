@@ -650,6 +650,9 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	fmt.Println(groupSetOp)
 	fmt.Println("(((((groupSetOp)))))")
 
+	fmt.Println(overallSelectStatement["select"])
+	fmt.Println("(((((overallSelectStatement[select])))")
+
 	query := map[string]string{
 		"overall_statement":       overallSelectStatement["select"],
 		"count_overall_statement": countOverallStatement,
