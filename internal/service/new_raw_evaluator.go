@@ -611,32 +611,49 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	var combinedIdentityKeys string
 
 	if len(groupSubqueries) == 0 {
-		// No segment groups — fetch all users for the project
-		combinedIdentityKeys = "SELECT nexora_id FROM cp_resolved"
-
-	} else if len(groupSubqueries) == 1 {
-		combinedIdentityKeys = fmt.Sprintf("SELECT identity_key FROM %s", groupSubqueries[0])
-
-	} else {
-		parts := []string{}
-		for _, sq := range groupSubqueries {
-			parts = append(parts, fmt.Sprintf("SELECT identity_key FROM %s", sq))
-		}
-		combinedIdentityKeys = strings.Join(parts, "\n    "+groupSetOp+"\n    ")
-	}
-
-	// Apply optional nexora_id filtering
-	if len(req.NexoraIDs) > 0 {
-		inList := buildInCondition("identity_key", req.NexoraIDs)
-		if combinedIdentityKeys != "" {
-			combinedIdentityKeys = fmt.Sprintf(
-				"SELECT identity_key FROM (%s) AS grp_combined WHERE 1=1 %s",
-				combinedIdentityKeys, inList,
-			)
-		} else {
+		// No segment groups
+		if len(req.NexoraIDs) > 0 {
+			// Only nexora_id filtering — no group conditions
+			inList := buildInCondition("identity_key", req.NexoraIDs)
 			combinedIdentityKeys = fmt.Sprintf(
 				"SELECT identity_key FROM cp_resolved WHERE 1=1 %s",
 				inList,
+			)
+		} else {
+			// No groups, no nexora_id filter — fetch ALL users for project
+			combinedIdentityKeys = "SELECT identity_key FROM cp_resolved"
+		}
+
+	} else if len(groupSubqueries) == 1 {
+		combinedIdentityKeys = fmt.Sprintf(
+			"SELECT identity_key FROM %s AS grp_0",
+			groupSubqueries[0],
+		)
+		// Apply nexora_id filter on top if present
+		if len(req.NexoraIDs) > 0 {
+			inList := buildInCondition("identity_key", req.NexoraIDs)
+			combinedIdentityKeys = fmt.Sprintf(
+				"SELECT identity_key FROM (%s) AS grp_filtered WHERE 1=1 %s",
+				combinedIdentityKeys, inList,
+			)
+		}
+
+	} else {
+		// Multiple groups — combine with set operator
+		parts := []string{}
+		for i, sq := range groupSubqueries {
+			parts = append(parts,
+				fmt.Sprintf("SELECT identity_key FROM %s AS grp_%d", sq, i),
+			)
+		}
+		combinedIdentityKeys = strings.Join(parts, "\n    "+groupSetOp+"\n    ")
+
+		// Apply nexora_id filter on top if present
+		if len(req.NexoraIDs) > 0 {
+			inList := buildInCondition("identity_key", req.NexoraIDs)
+			combinedIdentityKeys = fmt.Sprintf(
+				"SELECT identity_key FROM (%s) AS grp_filtered WHERE 1=1 %s",
+				combinedIdentityKeys, inList,
 			)
 		}
 	}
