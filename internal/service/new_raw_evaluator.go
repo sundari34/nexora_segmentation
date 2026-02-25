@@ -512,6 +512,39 @@ func buildFinalSelect(combinedIdentityKeys string, projectID, property string, r
 	}
 }
 
+// ─── build external filter WHERE clause ──────────────────────────────────────
+func buildExternalFilterCondition(ef models.ExternalFilterStruct) string {
+	if ef.SearchValue == "" {
+		return ""
+	}
+
+	val := strings.TrimSpace(ef.SearchValue)
+	if val == "" {
+		return ""
+	}
+
+	switch strings.ToLower(ef.SearchType) {
+	case "email":
+		return fmt.Sprintf("email LIKE '%%%s%%'", val)
+	case "mobile":
+		return fmt.Sprintf("mobile LIKE '%%%s%%'", val)
+	case "name":
+		return fmt.Sprintf("name LIKE '%%%s%%'", val)
+	case "nexora_id":
+		return fmt.Sprintf("nexora_id = '%s'", val)
+	case "external_user_id":
+		return fmt.Sprintf("external_user_id = '%s'", val)
+	case "identity_key":
+		return fmt.Sprintf("identity_key = '%s'", val)
+	default:
+		// fallback — search across all common fields
+		return fmt.Sprintf(
+			"(email LIKE '%%%s%%' OR mobile LIKE '%%%s%%' OR name LIKE '%%%s%%' OR nexora_id = '%s' OR external_user_id = '%s')",
+			val, val, val, val, val,
+		)
+	}
+}
+
 // ─── main entry point ─────────────────────────────────────────────────────────
 
 func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
@@ -608,33 +641,79 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 	}
 
 	// Combine all group subqueries — now using identity_key instead of nexora_id
+	// ─── build external filter condition ─────────────────────────────────────────
+	externalFilterCond := buildExternalFilterCondition(req.ExternalFilters)
+
 	var combinedIdentityKeys string
 
 	if len(groupSubqueries) == 0 {
 		// No segment groups
+		conditions := []string{"1=1"}
+
 		if len(req.NexoraIDs) > 0 {
-			// Only nexora_id filtering — no group conditions
-			inList := buildInCondition("nexora_id", req.NexoraIDs)
-			combinedIdentityKeys = fmt.Sprintf(
-				"SELECT identity_key FROM cp_resolved WHERE 1=1 %s",
-				inList,
-			)
-		} else {
-			// No groups, no nexora_id filter — fetch ALL users for project
-			combinedIdentityKeys = "SELECT identity_key FROM cp_resolved"
+			escaped := []string{}
+			for _, v := range req.NexoraIDs {
+				v = strings.TrimSpace(v)
+				if v != "" {
+					escaped = append(escaped, fmt.Sprintf("'%s'", v))
+				}
+			}
+			if len(escaped) > 0 {
+				inList := strings.Join(escaped, ",")
+				conditions = append(conditions,
+					fmt.Sprintf("(nexora_id IN (%s) OR identity_key IN (%s))", inList, inList),
+				)
+			}
 		}
+
+		if externalFilterCond != "" {
+			conditions = append(conditions, externalFilterCond)
+		}
+
+		combinedIdentityKeys = fmt.Sprintf(
+			"SELECT identity_key FROM cp_resolved WHERE %s",
+			strings.Join(conditions, " AND "),
+		)
 
 	} else if len(groupSubqueries) == 1 {
 		combinedIdentityKeys = fmt.Sprintf(
 			"SELECT identity_key FROM %s AS grp_0",
 			groupSubqueries[0],
 		)
-		// Apply nexora_id filter on top if present
+
+		// wrap with nexora_id + external filter if present
+		wrapConditions := []string{"1=1"}
+
 		if len(req.NexoraIDs) > 0 {
-			inList := buildInCondition("nexora_id", req.NexoraIDs)
+			escaped := []string{}
+			for _, v := range req.NexoraIDs {
+				v = strings.TrimSpace(v)
+				if v != "" {
+					escaped = append(escaped, fmt.Sprintf("'%s'", v))
+				}
+			}
+			if len(escaped) > 0 {
+				inList := strings.Join(escaped, ",")
+				wrapConditions = append(wrapConditions,
+					fmt.Sprintf("(nexora_id IN (%s) OR identity_key IN (%s))", inList, inList),
+				)
+			}
+		}
+
+		if externalFilterCond != "" {
+			wrapConditions = append(wrapConditions, externalFilterCond)
+		}
+
+		if len(wrapConditions) > 1 {
 			combinedIdentityKeys = fmt.Sprintf(
-				"SELECT identity_key FROM (%s) AS grp_filtered WHERE 1=1 %s",
-				combinedIdentityKeys, inList,
+				`SELECT identity_key FROM (
+                WITH %s
+                SELECT cp.* FROM cp_resolved AS cp
+                INNER JOIN (%s) AS grp ON cp.identity_key = grp.identity_key
+            ) AS grp_filtered WHERE %s`,
+				cpResolutionCTEs(req.ProjectID, req.Property),
+				combinedIdentityKeys,
+				strings.Join(wrapConditions, " AND "),
 			)
 		}
 
@@ -648,12 +727,39 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		}
 		combinedIdentityKeys = strings.Join(parts, "\n    "+groupSetOp+"\n    ")
 
-		// Apply nexora_id filter on top if present
+		// wrap with nexora_id + external filter if present
+		wrapConditions := []string{"1=1"}
+
 		if len(req.NexoraIDs) > 0 {
-			inList := buildInCondition("nexora_id", req.NexoraIDs)
+			escaped := []string{}
+			for _, v := range req.NexoraIDs {
+				v = strings.TrimSpace(v)
+				if v != "" {
+					escaped = append(escaped, fmt.Sprintf("'%s'", v))
+				}
+			}
+			if len(escaped) > 0 {
+				inList := strings.Join(escaped, ",")
+				wrapConditions = append(wrapConditions,
+					fmt.Sprintf("(nexora_id IN (%s) OR identity_key IN (%s))", inList, inList),
+				)
+			}
+		}
+
+		if externalFilterCond != "" {
+			wrapConditions = append(wrapConditions, externalFilterCond)
+		}
+
+		if len(wrapConditions) > 1 {
 			combinedIdentityKeys = fmt.Sprintf(
-				"SELECT identity_key FROM (%s) AS grp_filtered WHERE 1=1 %s",
-				combinedIdentityKeys, inList,
+				`SELECT identity_key FROM (
+                WITH %s
+                SELECT cp.* FROM cp_resolved AS cp
+                INNER JOIN (%s) AS grp ON cp.identity_key = grp.identity_key
+            ) AS grp_filtered WHERE %s`,
+				cpResolutionCTEs(req.ProjectID, req.Property),
+				combinedIdentityKeys,
+				strings.Join(wrapConditions, " AND "),
 			)
 		}
 	}

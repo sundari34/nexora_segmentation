@@ -3,18 +3,24 @@ package models
 import "encoding/json"
 
 type SegmentNewPayload struct {
-	GroupCondition string         `json:"group_condition,omitempty"`
-	Groups         []RuleGroupRaw `json:"groups,omitempty"`
-	Property       string         `json:"property,omitempty"`
-	Channel        string         `json:"channel,omitempty"`
-	NexoraIDs      []string       `json:"nexora_id,omitempty"`
-	ClientID       string         `json:"client_id,omitempty"`
-	ProjectID      string         `json:"project_id,omitempty"`
-	IsNeedCount    bool           `json:"need_count,omitempty"`
-	IsNeedSQL      bool           `json:"need_sql,omitempty"`
-	IsNeedValue    bool           `json:"need_value,omitempty"`
-	Source         string         `json:"source"`
-	LimitStatement string         `json:"limit_statement"`
+	GroupCondition  string               `json:"group_condition,omitempty"`
+	Groups          []RuleGroupRaw       `json:"groups,omitempty"`
+	Property        string               `json:"property,omitempty"`
+	Channel         string               `json:"channel,omitempty"`
+	NexoraIDs       []string             `json:"nexora_id,omitempty"`
+	ClientID        string               `json:"client_id,omitempty"`
+	ProjectID       string               `json:"project_id,omitempty"`
+	IsNeedCount     bool                 `json:"need_count,omitempty"`
+	IsNeedSQL       bool                 `json:"need_sql,omitempty"`
+	IsNeedValue     bool                 `json:"need_value,omitempty"`
+	Source          string               `json:"source"`
+	LimitStatement  string               `json:"limit_statement"`
+	ExternalFilters ExternalFilterStruct `json:"external_filters,omitempty"`
+}
+
+type ExternalFilterStruct struct {
+	SearchValue string `json:"search_value"`
+	SearchType  string `json:"search_type"`
 }
 
 type RuleGroupRaw struct {
