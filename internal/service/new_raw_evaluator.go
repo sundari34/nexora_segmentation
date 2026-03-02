@@ -14,6 +14,15 @@ import (
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
+func chDate(t time.Time) string {
+	return fmt.Sprintf("toDate('%s', 'UTC')", t.UTC().Format("2006-01-02"))
+}
+
+// chDateTime returns a ClickHouse UTC datetime literal
+func chDateTime(t time.Time) string {
+	return fmt.Sprintf("toDateTime('%s', 'UTC')", t.UTC().Format("2006-01-02"))
+}
+
 func daysFromNow(dateStr string) (int, error) {
 	targetDate, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
@@ -46,22 +55,66 @@ func getTimeConditionsTyped(tc *models.TimeCondition) string {
 
 	switch op {
 	case "last_n_days":
-		return fmt.Sprintf("ed.event_date <= %s", chDateTime(now.AddDate(0, 0, -days)))
+		// from N days ago up to now
+		from := now.AddDate(0, 0, -days)
+		return fmt.Sprintf(
+			"ed.event_date >= toDate('%s', 'UTC') AND ed.event_date <= toDate('%s', 'UTC')",
+			from.UTC().Format("2006-01-02"),
+			now.UTC().Format("2006-01-02"),
+		)
+
 	case "next_n_days":
-		return fmt.Sprintf("ed.event_date >= %s", chDateTime(now.AddDate(0, 0, days)))
+		// from now up to N days ahead
+		to := now.AddDate(0, 0, days)
+		return fmt.Sprintf(
+			"ed.event_date >= toDate('%s', 'UTC') AND ed.event_date <= toDate('%s', 'UTC')",
+			now.UTC().Format("2006-01-02"),
+			to.UTC().Format("2006-01-02"),
+		)
+
 	case "on":
-		return fmt.Sprintf("ed.event_date = %s", chDateTime(now.AddDate(0, 0, days)))
+		// exact date match in UTC
+		d, err := time.Parse("2006-01-02", fmt.Sprintf("%v", tc.Value))
+		if err != nil {
+			return ""
+		}
+		return fmt.Sprintf(
+			"ed.event_date = toDate('%s', 'UTC')",
+			d.UTC().Format("2006-01-02"),
+		)
+
 	case "before":
-		return fmt.Sprintf("ed.event_date < %s", chDateTime(now.AddDate(0, 0, days)))
+		d, err := time.Parse("2006-01-02", fmt.Sprintf("%v", tc.Value))
+		if err != nil {
+			return ""
+		}
+		return fmt.Sprintf(
+			"ed.event_date < toDate('%s', 'UTC')",
+			d.UTC().Format("2006-01-02"),
+		)
+
 	case "after":
-		return fmt.Sprintf("ed.event_date > %s", chDateTime(now.AddDate(0, 0, days)))
+		d, err := time.Parse("2006-01-02", fmt.Sprintf("%v", tc.Value))
+		if err != nil {
+			return ""
+		}
+		return fmt.Sprintf(
+			"ed.event_date > toDate('%s', 'UTC')",
+			d.UTC().Format("2006-01-02"),
+		)
+
 	case "between":
 		start, err1 := time.Parse("2006-01-02", tc.StartDate)
 		end, err2 := time.Parse("2006-01-02", tc.EndDate)
 		if err1 != nil || err2 != nil {
 			return ""
 		}
-		return fmt.Sprintf("ed.event_date BETWEEN %s AND %s", chDateTime(start), chDateTime(end))
+		return fmt.Sprintf(
+			"ed.event_date >= toDate('%s', 'UTC') AND ed.event_date <= toDate('%s', 'UTC')",
+			start.UTC().Format("2006-01-02"),
+			end.UTC().Format("2006-01-02"),
+		)
+
 	default:
 		return ""
 	}
@@ -281,10 +334,6 @@ func getEventsEquivalentField(field string) string {
 		return fmt.Sprintf("JSONExtractString(arrayElement(JSONExtract(ev.raw_payload, 'Array(JSON)'), 1), '%s')", path)
 	}
 	return fmt.Sprintf("JSONExtractString(ev.event_properties, '%s')", field)
-}
-
-func chDateTime(t time.Time) string {
-	return fmt.Sprintf("toDateTime('%s', 'UTC')", t.UTC().Format("2006-01-02"))
 }
 
 func buildInCondition(column string, values []string) string {
