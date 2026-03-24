@@ -656,8 +656,13 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 					}
 				}
 
-				singleEventConditions = append(singleEventConditions,
-					fmt.Sprintf("ed.event_name = '%s'", ec.EventName))
+				if ec.Condition == "has_performed" {
+					singleEventConditions = append(singleEventConditions,
+						fmt.Sprintf("ed.event_name = '%s'", ec.EventName))
+				} else {
+					singleEventConditions = append(singleEventConditions,
+						fmt.Sprintf("ed.event_name != '%s'", ec.EventName))
+				}
 
 				pg.eventFilterClauses = append(pg.eventFilterClauses, singleEventConditions)
 				pg.eventMatchMode = eventFiltersMatchMode
