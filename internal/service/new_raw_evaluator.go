@@ -190,11 +190,11 @@ func handleTypedRule(r models.Rule, where *[]string, having *[]string, scope *st
 		if opLower == "like" || opLower == "not like" {
 			switch strings.ToLower(r.Operator) {
 			case "beginswith", "doesnotendwith":
-				*having = append(*having, fmt.Sprintf("%s %s '%v%%'", cp, op, r.Value))
+				*having = append(*having, fmt.Sprintf("LOWER(%s) %s 'LOWER(%v)%%'", cp, op, r.Value))
 			case "endswith", "doesnotbeginwith":
-				*having = append(*having, fmt.Sprintf("%s %s '%%%v'", cp, op, r.Value))
+				*having = append(*having, fmt.Sprintf("LOWER(%s) %s '%%LOWER(%v)'", cp, op, r.Value))
 			default:
-				*having = append(*having, fmt.Sprintf("%s %s '%%%v%%'", cp, op, r.Value))
+				*having = append(*having, fmt.Sprintf("LOWER(%s) %s '%%LOWER(%v)%%'", cp, op, r.Value))
 			}
 		} else if opLower == "is null" || opLower == "is not null" {
 			var condition string
