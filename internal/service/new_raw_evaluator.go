@@ -188,13 +188,17 @@ func handleTypedRule(r models.Rule, where *[]string, having *[]string, scope *st
 		opLower := strings.ToLower(op)
 
 		if opLower == "like" || opLower == "not like" {
+			// Use LOWER(column) and LOWER(value) for case-insensitive matching
+			columnExpr := fmt.Sprintf("LOWER(%s)", cp)
+			valLower := strings.ToLower(fmt.Sprintf("%v", r.Value))
+
 			switch strings.ToLower(r.Operator) {
 			case "beginswith", "doesnotendwith":
-				*having = append(*having, fmt.Sprintf("LOWER(%s) %s 'LOWER(%v)%%'", cp, op, r.Value))
+				*having = append(*having, fmt.Sprintf("%s %s '%s%%'", columnExpr, op, valLower))
 			case "endswith", "doesnotbeginwith":
-				*having = append(*having, fmt.Sprintf("LOWER(%s) %s '%%LOWER(%v)'", cp, op, r.Value))
+				*having = append(*having, fmt.Sprintf("%s %s '%%%s'", columnExpr, op, valLower))
 			default:
-				*having = append(*having, fmt.Sprintf("LOWER(%s) %s '%%LOWER(%v)%%'", cp, op, r.Value))
+				*having = append(*having, fmt.Sprintf("%s %s '%%%s%%'", columnExpr, op, valLower))
 			}
 		} else if opLower == "is null" || opLower == "is not null" {
 			var condition string
@@ -209,27 +213,32 @@ func handleTypedRule(r models.Rule, where *[]string, having *[]string, scope *st
 			switch v := r.Value.(type) {
 			case []string:
 				for _, val := range v {
-					valuesArr = append(valuesArr, fmt.Sprintf("'%v'", val))
+					valuesArr = append(valuesArr, fmt.Sprintf("LOWER('%v')", val))
 				}
 			default:
-				valuesArr = []string{fmt.Sprintf("'%v'", v)}
+				valuesArr = []string{fmt.Sprintf("LOWER('%v')", v)}
 			}
-			*having = append(*having, fmt.Sprintf("%s %s (%v)", cp, op, strings.Join(valuesArr, ", ")))
+			// Use LOWER(column) IN (LOWER('val1'), LOWER('val2'))
+			*having = append(*having, fmt.Sprintf("LOWER(%s) %s (%v)", cp, op, strings.Join(valuesArr, ", ")))
 		} else {
-			*having = append(*having, fmt.Sprintf("%s %s '%v'", cp, op, r.Value))
+			// Standard comparison (e.g., =, !=) made case-insensitive
+			*having = append(*having, fmt.Sprintf("LOWER(%s) %s LOWER('%v')", cp, op, r.Value))
 		}
 	} else {
 		ev := getEventsEquivalentField(r.Field)
 		opLower := strings.ToLower(op)
 
 		if opLower == "like" || opLower == "not like" {
+			columnExpr := fmt.Sprintf("LOWER(%s)", ev)
+			valLower := strings.ToLower(fmt.Sprintf("%v", r.Value))
+
 			switch strings.ToLower(r.Operator) {
 			case "beginswith", "doesnotendwith":
-				*where = append(*where, fmt.Sprintf("%s %s '%v%%'", ev, op, r.Value))
+				*where = append(*where, fmt.Sprintf("%s %s '%s%%'", columnExpr, op, valLower))
 			case "endswith", "doesnotbeginwith":
-				*where = append(*where, fmt.Sprintf("%s %s '%%%v'", ev, op, r.Value))
+				*where = append(*where, fmt.Sprintf("%s %s '%%%s'", columnExpr, op, valLower))
 			default:
-				*where = append(*where, fmt.Sprintf("%s %s '%%%v%%'", ev, op, r.Value))
+				*where = append(*where, fmt.Sprintf("%s %s '%%%s%%'", columnExpr, op, valLower))
 			}
 		} else if opLower == "is null" || opLower == "is not null" {
 			var condition string
@@ -244,14 +253,15 @@ func handleTypedRule(r models.Rule, where *[]string, having *[]string, scope *st
 			switch v := r.Value.(type) {
 			case []string:
 				for _, val := range v {
-					valuesArr = append(valuesArr, fmt.Sprintf("'%v'", val))
+					valuesArr = append(valuesArr, fmt.Sprintf("LOWER('%v')", val))
 				}
 			default:
-				valuesArr = []string{fmt.Sprintf("'%v'", v)}
+				valuesArr = []string{fmt.Sprintf("LOWER('%v')", v)}
 			}
-			*where = append(*where, fmt.Sprintf("%s %s (%v)", ev, op, strings.Join(valuesArr, ", ")))
+			*where = append(*where, fmt.Sprintf("LOWER(%s) %s (%v)", ev, op, strings.Join(valuesArr, ", ")))
 		} else {
-			*where = append(*where, fmt.Sprintf("%s %s '%v'", ev, op, r.Value))
+			// Standard comparison made case-insensitive
+			*where = append(*where, fmt.Sprintf("LOWER(%s) %s LOWER('%v')", ev, op, r.Value))
 		}
 	}
 }
