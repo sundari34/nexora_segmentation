@@ -525,8 +525,6 @@ func buildFinalSelect(combinedIdentityKeys string, projectID, property string, r
 	if req.LimitStatement != "" {
 		limitAndOffsets = req.LimitStatement
 	}
-	fmt.Println(limitAndOffsets)
-	fmt.Println("(((((((((((((((limitAndOffsets)))))))))))))))")
 	selectStatement := fmt.Sprintf(`WITH
 		%s,
 		combined_identity_keys AS (
