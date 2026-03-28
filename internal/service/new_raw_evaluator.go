@@ -171,6 +171,7 @@ func isNegativeSemantic(op string, val interface{}) bool {
 func handleTypedRule(r models.Rule, where *[]string, having *[]string, scope *string, includeAnonymouseUsers string) {
 	op := getCHEquivalentOperator(r.Operator)
 
+	// Handle nested rules (recursion)
 	if nested, ok := r.Value.(models.QueryBlock); ok {
 		*scope = r.Field
 		for _, nr := range nested.Rules {
@@ -183,86 +184,127 @@ func handleTypedRule(r models.Rule, where *[]string, having *[]string, scope *st
 		includeAnonymouseUsers = "yes"
 	}
 
+	// 1. Common Setup: Determine the field name and which slice to append to
+	var fieldName string
+	var targetSlice *[]string
+
 	if *scope == "user" {
-		cp := getCustomerProfileEquivalentField(r.Field)
-		opLower := strings.ToLower(op)
-
-		if opLower == "like" || opLower == "not like" {
-			// Use LOWER(column) and LOWER(value) for case-insensitive matching
-			columnExpr := fmt.Sprintf("LOWER(%s)", cp)
-			valLower := strings.ToLower(fmt.Sprintf("%v", r.Value))
-
-			switch strings.ToLower(r.Operator) {
-			case "beginswith", "doesnotendwith":
-				*having = append(*having, fmt.Sprintf("%s %s '%s%%'", columnExpr, op, valLower))
-			case "endswith", "doesnotbeginwith":
-				*having = append(*having, fmt.Sprintf("%s %s '%%%s'", columnExpr, op, valLower))
-			default:
-				*having = append(*having, fmt.Sprintf("%s %s '%%%s%%'", columnExpr, op, valLower))
-			}
-		} else if opLower == "is null" || opLower == "is not null" {
-			var condition string
-			if opLower == "is not null" {
-				condition = fmt.Sprintf("(%s IS NOT NULL AND %s != '' AND %s != '0' AND LOWER(%s) != 'none')", cp, cp, cp, cp)
-			} else {
-				condition = fmt.Sprintf("(%s IS NULL OR %s = '' OR %s = '0' OR LOWER(%s) = 'none')", cp, cp, cp, cp)
-			}
-			*having = append(*having, condition)
-		} else if opLower == "in" || opLower == "not in" {
-			var valuesArr []string
-			switch v := r.Value.(type) {
-			case []string:
-				for _, val := range v {
-					valuesArr = append(valuesArr, fmt.Sprintf("LOWER('%v')", val))
-				}
-			default:
-				valuesArr = []string{fmt.Sprintf("LOWER('%v')", v)}
-			}
-			// Use LOWER(column) IN (LOWER('val1'), LOWER('val2'))
-			*having = append(*having, fmt.Sprintf("LOWER(%s) %s (%v)", cp, op, strings.Join(valuesArr, ", ")))
-		} else {
-			// Standard comparison (e.g., =, !=) made case-insensitive
-			*having = append(*having, fmt.Sprintf("LOWER(%s) %s LOWER('%v')", cp, op, r.Value))
-		}
+		fieldName = getCustomerProfileEquivalentField(r.Field)
+		targetSlice = having
 	} else {
-		ev := getEventsEquivalentField(r.Field)
-		opLower := strings.ToLower(op)
+		fieldName = getEventsEquivalentField(r.Field)
+		targetSlice = where
+	}
 
-		if opLower == "like" || opLower == "not like" {
-			columnExpr := fmt.Sprintf("LOWER(%s)", ev)
-			valLower := strings.ToLower(fmt.Sprintf("%v", r.Value))
+	opLower := strings.ToLower(op)
+	var condition string
 
-			switch strings.ToLower(r.Operator) {
-			case "beginswith", "doesnotendwith":
-				*where = append(*where, fmt.Sprintf("%s %s '%s%%'", columnExpr, op, valLower))
-			case "endswith", "doesnotbeginwith":
-				*where = append(*where, fmt.Sprintf("%s %s '%%%s'", columnExpr, op, valLower))
-			default:
-				*where = append(*where, fmt.Sprintf("%s %s '%%%s%%'", columnExpr, op, valLower))
+	// 2. Common Logic Switch: Driven by Operator
+	switch opLower {
+
+	// --- DATE OPERATORS ---
+	case "last_n_days", "next_n_days", "on", "before", "after", "between":
+		now := time.Now().UTC()
+		switch opLower {
+		case "last_n_days":
+			var days int
+			if v, ok := r.Value.(float64); ok {
+				days = int(v)
 			}
-		} else if opLower == "is null" || opLower == "is not null" {
-			var condition string
-			if opLower == "is not null" {
-				condition = fmt.Sprintf("(%s IS NOT NULL AND %s != '' AND %s != '0' AND LOWER(%s) != 'none')", ev, ev, ev, ev)
-			} else {
-				condition = fmt.Sprintf("(%s IS NULL OR %s = '' OR %s = '0' OR LOWER(%s) = 'none')", ev, ev, ev, ev)
+			from := now.AddDate(0, 0, -days)
+			condition = fmt.Sprintf("%s >= toDate('%s', 'UTC') AND %s <= toDate('%s', 'UTC')",
+				fieldName, from.Format("2006-01-02"), fieldName, now.Format("2006-01-02"))
+
+		case "next_n_days":
+			var days int
+			if v, ok := r.Value.(float64); ok {
+				days = int(v)
 			}
-			*where = append(*where, condition)
-		} else if opLower == "in" || opLower == "not in" {
-			var valuesArr []string
-			switch v := r.Value.(type) {
-			case []string:
-				for _, val := range v {
-					valuesArr = append(valuesArr, fmt.Sprintf("LOWER('%v')", val))
-				}
-			default:
-				valuesArr = []string{fmt.Sprintf("LOWER('%v')", v)}
-			}
-			*where = append(*where, fmt.Sprintf("LOWER(%s) %s (%v)", ev, op, strings.Join(valuesArr, ", ")))
-		} else {
-			// Standard comparison made case-insensitive
-			*where = append(*where, fmt.Sprintf("LOWER(%s) %s LOWER('%v')", ev, op, r.Value))
+			to := now.AddDate(0, 0, days)
+			condition = fmt.Sprintf("%s >= toDate('%s', 'UTC') AND %s <= toDate('%s', 'UTC')",
+				fieldName, now.Format("2006-01-02"), fieldName, to.Format("2006-01-02"))
+
+		case "on":
+			d, _ := time.Parse("2006-01-02", fmt.Sprintf("%v", r.Value))
+			condition = fmt.Sprintf("%s = toDate('%s', 'UTC')", fieldName, d.Format("2006-01-02"))
+
+		case "before":
+			d, _ := time.Parse("2006-01-02", fmt.Sprintf("%v", r.Value))
+			condition = fmt.Sprintf("%s < toDate('%s', 'UTC')", fieldName, d.Format("2006-01-02"))
+
+		case "after":
+			d, _ := time.Parse("2006-01-02", fmt.Sprintf("%v", r.Value))
+			condition = fmt.Sprintf("%s > toDate('%s', 'UTC')", fieldName, d.Format("2006-01-02"))
+
+		case "between":
+			// Assumes r has StartDate/EndDate fields or similar logic
+			fmt.Println(r.Value)
+			fmt.Println(fmt.Sprintf("%v", r.Value))
+			dateRange := strings.Split(fmt.Sprintf("%v", r.Value), "-")
+			fromDate := dateRange[0]
+			toDate := dateRange[1]
+			condition = fmt.Sprintf("%s >= toDate('%s', 'UTC') AND %s <= toDate('%s', 'UTC')",
+				fieldName, fromDate, fieldName, toDate)
 		}
+
+	// --- NULL CHECKS ---
+	case "is null", "is not null":
+		if opLower == "is not null" {
+			condition = fmt.Sprintf("(%s IS NOT NULL AND %s != '' AND %s != '0' AND LOWER(%s) != 'none')", fieldName, fieldName, fieldName, fieldName)
+		} else {
+			condition = fmt.Sprintf("(%s IS NULL OR %s = '' OR %s = '0' OR LOWER(%s) = 'none')", fieldName, fieldName, fieldName, fieldName)
+		}
+
+	// --- STRING PATTERN MATCHING ---
+	case "like", "not like", "beginswith", "endswith", "doesnotbeginwith", "doesnotendwith":
+		columnExpr := fmt.Sprintf("LOWER(%s)", fieldName)
+		valLower := strings.ToLower(fmt.Sprintf("%v", r.Value))
+
+		// Map helper operators back to SQL LIKE/NOT LIKE
+		actualOp := op
+		if strings.Contains(opLower, "begin") || strings.Contains(opLower, "end") {
+			if strings.Contains(opLower, "not") || strings.Contains(opLower, "doesnot") {
+				actualOp = "NOT LIKE"
+			} else {
+				actualOp = "LIKE"
+			}
+		}
+
+		switch opLower {
+		case "beginswith", "doesnotendwith":
+			condition = fmt.Sprintf("%s %s '%s%%'", columnExpr, actualOp, valLower)
+		case "endswith", "doesnotbeginwith":
+			condition = fmt.Sprintf("%s %s '%%%s'", columnExpr, actualOp, valLower)
+		default:
+			condition = fmt.Sprintf("%s %s '%%%s%%'", columnExpr, actualOp, valLower)
+		}
+
+	// --- SET OPERATORS ---
+	case "in", "not in":
+		var valuesArr []string
+		switch v := r.Value.(type) {
+		case []string:
+			for _, val := range v {
+				valuesArr = append(valuesArr, fmt.Sprintf("LOWER('%v')", val))
+			}
+		default:
+			valuesArr = []string{fmt.Sprintf("LOWER('%v')", v)}
+		}
+		condition = fmt.Sprintf("LOWER(%s) %s (%v)", fieldName, op, strings.Join(valuesArr, ", "))
+
+	// --- NUMERIC OPERATORS ---
+	case ">", "<", ">=", "<=":
+		// No LOWER() or single quotes for numeric comparisons
+		condition = fmt.Sprintf("%s %s %v", fieldName, op, r.Value)
+
+	// --- DEFAULT (EQUALS / NOT EQUALS) ---
+	default:
+		condition = fmt.Sprintf("LOWER(%s) %s LOWER('%v')", fieldName, op, r.Value)
+	}
+
+	// 3. Append to the relevant target slice
+	if condition != "" {
+		*targetSlice = append(*targetSlice, condition)
 	}
 }
 
