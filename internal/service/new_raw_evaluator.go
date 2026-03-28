@@ -196,7 +196,11 @@ func handleTypedRule(r models.Rule, where *[]string, having *[]string, scope *st
 		targetSlice = where
 	}
 
+	fmt.Println(fieldName)
+	fmt.Println("(((((((fieldName)))))))")
 	opLower := strings.ToLower(op)
+	fmt.Println(opLower)
+	fmt.Println("(((((((opLower)))))))")
 	var condition string
 
 	// 2. Common Logic Switch: Driven by Operator
