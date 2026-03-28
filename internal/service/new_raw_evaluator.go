@@ -240,10 +240,9 @@ func handleTypedRule(r models.Rule, where *[]string, having *[]string, scope *st
 			// Assumes r has StartDate/EndDate fields or similar logic
 			fmt.Println(r.Value)
 			fmt.Println(fmt.Sprintf("%v", r.Value))
-			dateRange := strings.Split(fmt.Sprintf("%v", r.Value), "-")
-			fromDate := dateRange[0]
-			toDate := dateRange[1]
-			condition = fmt.Sprintf("%s >= toDate('%s', 'UTC') AND %s <= toDate('%s', 'UTC')",
+			fromDate := r.Value.(string)[0]
+			toDate := r.Value.(string)[1]
+			condition = fmt.Sprintf("%s >= toDate('%v', 'UTC') AND %s <= toDate('%v', 'UTC')",
 				fieldName, fromDate, fieldName, toDate)
 		}
 
