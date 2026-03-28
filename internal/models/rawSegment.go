@@ -51,6 +51,7 @@ type QueryBlock struct {
 }
 
 type Rule struct {
+	Type     string `json:"type"`     // dynamic values from DB
 	Field    string `json:"field"`    // dynamic values from DB
 	Operator string `json:"operator"` //
 	/* Available operators */

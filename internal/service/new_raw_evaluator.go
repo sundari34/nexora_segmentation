@@ -253,8 +253,13 @@ func handleTypedRule(r models.Rule, where *[]string, having *[]string, scope *st
 			}
 
 			if start != "" && end != "" {
-				condition = fmt.Sprintf("toDate(%s) >= toDate('%s', 'UTC') AND toDate(%s) <= toDate('%s', 'UTC')",
-					fieldName, start, fieldName, end)
+				if r.Type == "date" {
+					condition = fmt.Sprintf("toDate(%s) >= toDate('%s', 'UTC') AND toDate(%s) <= toDate('%s', 'UTC')",
+						fieldName, start, fieldName, end)
+				} else {
+					condition = fmt.Sprintf("%s >= '%s' AND %s <= '%s'",
+						fieldName, start, fieldName, end)
+				}
 			}
 		}
 
