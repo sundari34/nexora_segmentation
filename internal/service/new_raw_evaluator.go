@@ -340,7 +340,7 @@ func getCHEquivalentOperator(op string) string {
 	case "beginswith", "doesnotendwith", "endswith", "doesnotbeginwith":
 		return "like"
 	default:
-		return ""
+		return strings.ToLower(op)
 	}
 }
 
