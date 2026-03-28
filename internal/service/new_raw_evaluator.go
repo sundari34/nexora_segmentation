@@ -242,7 +242,7 @@ func handleTypedRule(r models.Rule, where *[]string, having *[]string, scope *st
 
 		case "between":
 			var start, end string
-			
+
 			// Check if Value is a string containing a range (e.g., "2026-03-01 2026-03-28")
 			valStr := fmt.Sprintf("%v", r.Value)
 			parts := strings.Fields(strings.Trim(valStr, "[]")) // Removes brackets and splits by space
@@ -250,19 +250,13 @@ func handleTypedRule(r models.Rule, where *[]string, having *[]string, scope *st
 			if len(parts) == 2 {
 				start = parts[0]
 				end = parts[1]
-			} else {
-				// Fallback to explicit struct fields if parts aren't in the Value string
-				start = r.StartDate
-				end = r.EndDate
 			}
 
 			if start != "" && end != "" {
 				condition = fmt.Sprintf("%s >= toDate('%s', 'UTC') AND %s <= toDate('%s', 'UTC')",
 					fieldName, start, fieldName, end)
-			} else {
-				// Numeric fallback if dates aren't provided
-				condition = fmt.Sprintf("%s BETWEEN %v AND %v", fieldName, r.StartDate, r.EndDate)
 			}
+		}
 
 	// --- NULL CHECKS ---
 	case "is null", "is not null":
