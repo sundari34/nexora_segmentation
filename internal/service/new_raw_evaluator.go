@@ -601,7 +601,7 @@ func buildFinalSelect(combinedIdentityKeys string, projectID, property string, r
 		SELECT %s
 		FROM cp_resolved
 		WHERE identity_key IN (SELECT identity_key FROM combined_identity_keys)
-		ORDER BY updated_at DESC NULLS LAST
+		ORDER BY nexora_id DESC, updated_at DESC NULLS LAST
 		%s`,
 		cpResolutionCTEs(projectID, property),
 		combinedIdentityKeys,
