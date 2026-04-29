@@ -543,7 +543,7 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
 	}
 	eventBlock := strings.Join(eventSelects, "\n        "+setOp+"\n        ")
 
-	return fmt.Sprintf(`(s
+	return fmt.Sprintf(`(
     WITH
     %s,
     cp_filtered AS (
@@ -599,7 +599,7 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
             FROM event_daily
             WHERE event_date < toDate('2026-04-29', 'UTC')
             EXCEPT
-            SELECT nexora_id
+            SELECT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
             FROM event_daily
             WHERE event_date < toDate('2026-04-29', 'UTC')
               AND event_name = %s`, currentEventName)
