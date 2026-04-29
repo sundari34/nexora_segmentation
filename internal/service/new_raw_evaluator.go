@@ -499,36 +499,54 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
 	eventSelects := []string{}
 	for _, conditions := range pg.eventFilterClauses {
 		var currentEventName string
+		var otherConditions []string
 		hasNegativeCondition := false
 
+		// Separate the event name exclusion from other filters (like dates)
 		for _, c := range conditions {
-			if strings.Contains(c, "!=") {
+			if strings.Contains(c, "ed.event_name != ") {
 				hasNegativeCondition = true
 				parts := strings.Split(c, "!=")
 				if len(parts) > 1 {
 					currentEventName = strings.TrimSpace(parts[1])
 				}
-				break
+			} else {
+				otherConditions = append(otherConditions, c)
 			}
 		}
 
 		if hasNegativeCondition && currentEventName != "" {
-			// Note: We use NULL as a placeholder for user_id in EXCEPT if it's not available in event_daily
-			// to keep column counts consistent across INTERSECT branches.
+			// Construct context clause (Dates, etc.)
+			contextWhere := ""
+			if len(otherConditions) > 0 {
+				contextWhere = "WHERE " + strings.Join(otherConditions, " AND ")
+			}
+
+			// EXCEPT logic: [Users in this timeframe] MINUS [Users who did the event in this timeframe]
 			query := fmt.Sprintf(`
             SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
-            FROM event_daily
-            WHERE event_date < toDate('2026-04-29', 'UTC')
+            FROM events ev
+            INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
+            %s
             EXCEPT DISTINCT
-            SELECT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
-            FROM event_daily
-            WHERE event_date < toDate('2026-04-29', 'UTC')
-              AND event_name = %s`, currentEventName)
+            SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
+            FROM events ev
+            INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
+            %s %s AND ed.event_name = %s`,
+				contextWhere,
+				contextWhere,
+				func() string {
+					if contextWhere == "" {
+						return "WHERE"
+					}
+					return "AND"
+				}(),
+				currentEventName)
 
 			eventSelects = append(eventSelects, query)
 		} else {
+			// Standard "Has performed" logic
 			whereClause := "WHERE " + strings.Join(conditions, " AND ")
-			// We select nexora_id here.
 			eventSelects = append(eventSelects, fmt.Sprintf(
 				`SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
             FROM events ev
@@ -547,13 +565,11 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
     WITH
     %s,
     cp_filtered AS (
-        /* We pull external_user_id here so it's available for the final SELECT */
         SELECT identity_key, nexora_id, external_user_id FROM cp_resolved
     ),
     event_users AS (
         %s
     )
-    /* Final Join: Link nexora_id from events to the full profile data */
     SELECT cp.identity_key, cp.external_user_id, cp.nexora_id
     FROM event_users eu
     INNER JOIN cp_filtered cp ON eu.eu_identity_key = cp.identity_key
@@ -580,31 +596,53 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
 	eventSelects := []string{}
 	for _, conditions := range pg.eventFilterClauses {
 		var currentEventName string
+		var otherConditions []string
 		hasNegativeCondition := false
 
+		// Separate the event name exclusion from other filters (like dates)
 		for _, c := range conditions {
-			if strings.Contains(c, "!=") {
+			if strings.Contains(c, "ed.event_name != ") {
 				hasNegativeCondition = true
 				parts := strings.Split(c, "!=")
 				if len(parts) > 1 {
 					currentEventName = strings.TrimSpace(parts[1])
 				}
-				break
+			} else {
+				otherConditions = append(otherConditions, c)
 			}
 		}
 
 		if hasNegativeCondition && currentEventName != "" {
+			// Construct context clause (Dates, etc.)
+			contextWhere := ""
+			if len(otherConditions) > 0 {
+				contextWhere = "WHERE " + strings.Join(otherConditions, " AND ")
+			}
+
+			// EXCEPT logic: [Users in this timeframe] MINUS [Users who did the event in this timeframe]
 			query := fmt.Sprintf(`
             SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
-            FROM event_daily
-            WHERE event_date < toDate('2026-04-29', 'UTC')
-            EXCEPT
-            SELECT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
-            FROM event_daily
-            WHERE event_date < toDate('2026-04-29', 'UTC')
-              AND event_name = %s`, currentEventName)
+            FROM events ev
+            INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
+            %s
+            EXCEPT DISTINCT
+            SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
+            FROM events ev
+            INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
+            %s %s AND ed.event_name = %s`,
+				contextWhere,
+				contextWhere,
+				func() string {
+					if contextWhere == "" {
+						return "WHERE"
+					}
+					return "AND"
+				}(),
+				currentEventName)
+
 			eventSelects = append(eventSelects, query)
 		} else {
+			// Standard "Has performed" logic
 			whereClause := "WHERE " + strings.Join(conditions, " AND ")
 			eventSelects = append(eventSelects, fmt.Sprintf(
 				`SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
