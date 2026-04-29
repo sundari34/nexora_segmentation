@@ -498,14 +498,45 @@ func buildGroupSubquery(pg parsedGroup, projectID, property string) string {
 func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) string {
 	eventSelects := []string{}
 	for _, conditions := range pg.eventFilterClauses {
-		fmt.Println(conditions)
-		fmt.Println("((((((((conditions inside event only group sub query))))))))")
-		whereClause := "WHERE " + strings.Join(conditions, " AND ")
-		eventSelects = append(eventSelects, fmt.Sprintf(
-			`SELECT DISTINCT ev.nexora_id
-        FROM events ev
-        INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
-        %s`, whereClause))
+		var whereClause string
+		var currentEventName string
+		hasNegativeCondition := false
+
+		// 1. Check for the negative condition and extract the event name
+		for _, c := range conditions {
+			if strings.Contains(c, "!=") {
+				hasNegativeCondition = true
+				// Extract 'order_placed' from "ed.event_name != 'order_placed'"
+				parts := strings.Split(c, "!=")
+				if len(parts) > 1 {
+					currentEventName = strings.TrimSpace(parts[1])
+				}
+				break
+			}
+		}
+
+		if hasNegativeCondition && currentEventName != "" {
+			// 2. Frame the Dynamic EXCEPT query
+			query := fmt.Sprintf(`
+            SELECT DISTINCT nexora_id 
+            FROM event_daily
+            WHERE event_date < toDate('2026-04-29', 'UTC')
+            EXCEPT
+            SELECT nexora_id 
+            FROM event_daily
+            WHERE event_date < toDate('2026-04-29', 'UTC')
+              AND event_name = %s`, currentEventName)
+
+			eventSelects = append(eventSelects, query)
+		} else {
+			// 3. Fallback to standard JOIN logic for positive matches
+			whereClause = "WHERE " + strings.Join(conditions, " AND ")
+			eventSelects = append(eventSelects, fmt.Sprintf(
+				`SELECT DISTINCT ev.nexora_id
+            FROM events ev
+            INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
+            %s`, whereClause))
+		}
 	}
 
 	setOp := "INTERSECT"
@@ -547,14 +578,45 @@ func buildUserPropOnlyGroupSubquery(pg parsedGroup, projectID, property string) 
 func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string {
 	eventSelects := []string{}
 	for _, conditions := range pg.eventFilterClauses {
-		fmt.Println(conditions)
-		fmt.Println("((((((((conditions inside mixed group sub query))))))))")
-		whereClause := "WHERE " + strings.Join(conditions, " AND ")
-		eventSelects = append(eventSelects, fmt.Sprintf(
-			`SELECT DISTINCT ev.nexora_id
-        FROM events ev
-        INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
-        %s`, whereClause))
+		var whereClause string
+		var currentEventName string
+		hasNegativeCondition := false
+
+		// 1. Check for the negative condition and extract the event name
+		for _, c := range conditions {
+			if strings.Contains(c, "!=") {
+				hasNegativeCondition = true
+				// Extract 'order_placed' from "ed.event_name != 'order_placed'"
+				parts := strings.Split(c, "!=")
+				if len(parts) > 1 {
+					currentEventName = strings.TrimSpace(parts[1])
+				}
+				break
+			}
+		}
+
+		if hasNegativeCondition && currentEventName != "" {
+			// 2. Frame the Dynamic EXCEPT query
+			query := fmt.Sprintf(`
+            SELECT DISTINCT nexora_id 
+            FROM event_daily
+            WHERE event_date < toDate('2026-04-29', 'UTC')
+            EXCEPT
+            SELECT nexora_id 
+            FROM event_daily
+            WHERE event_date < toDate('2026-04-29', 'UTC')
+              AND event_name = %s`, currentEventName)
+
+			eventSelects = append(eventSelects, query)
+		} else {
+			// 3. Fallback to standard JOIN logic for positive matches
+			whereClause = "WHERE " + strings.Join(conditions, " AND ")
+			eventSelects = append(eventSelects, fmt.Sprintf(
+				`SELECT DISTINCT ev.nexora_id
+            FROM events ev
+            INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
+            %s`, whereClause))
+		}
 	}
 
 	setOp := "INTERSECT"
