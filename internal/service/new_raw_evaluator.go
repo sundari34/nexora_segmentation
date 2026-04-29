@@ -621,7 +621,7 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
 
 			joiner := "WHERE"
 			if contextWhere != "" {
-				joiner = "AND"
+				joiner = ""
 			}
 
 			// 2. Generate the query
