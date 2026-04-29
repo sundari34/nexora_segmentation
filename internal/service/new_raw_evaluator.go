@@ -619,25 +619,25 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
 				contextWhere = "WHERE " + strings.Join(otherConditions, " AND ")
 			}
 
-			// EXCEPT logic: [Users in this timeframe] MINUS [Users who did the event in this timeframe]
+			joiner := "WHERE"
+			if contextWhere != "" {
+				joiner = "AND"
+			}
+
+			// 2. Generate the query
 			query := fmt.Sprintf(`
-            SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
-            FROM events ev
-            INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
-            %s
-            EXCEPT DISTINCT
-            SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
-            FROM events ev
-            INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
-            %s %s AND ed.event_name = %s`,
-				contextWhere,
-				contextWhere,
-				func() string {
-					if contextWhere == "" {
-						return "WHERE"
-					}
-					return "AND"
-				}(),
+    SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
+    FROM events ev
+    INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
+    %s
+    EXCEPT DISTINCT
+    SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
+    FROM events ev
+    INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
+    %s %s ed.event_name = %s`,
+				contextWhere, // The first block context (e.g., "WHERE ed.event_date...")
+				contextWhere, // The second block context
+				joiner,       // Dynamically "WHERE" or "AND"
 				currentEventName)
 
 			eventSelects = append(eventSelects, query)
