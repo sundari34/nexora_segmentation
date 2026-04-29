@@ -498,15 +498,12 @@ func buildGroupSubquery(pg parsedGroup, projectID, property string) string {
 func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) string {
 	eventSelects := []string{}
 	for _, conditions := range pg.eventFilterClauses {
-		var whereClause string
 		var currentEventName string
 		hasNegativeCondition := false
 
-		// 1. Check for the negative condition and extract the event name
 		for _, c := range conditions {
 			if strings.Contains(c, "!=") {
 				hasNegativeCondition = true
-				// Extract 'order_placed' from "ed.event_name != 'order_placed'"
 				parts := strings.Split(c, "!=")
 				if len(parts) > 1 {
 					currentEventName = strings.TrimSpace(parts[1])
@@ -516,7 +513,8 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
 		}
 
 		if hasNegativeCondition && currentEventName != "" {
-			// 2. Frame the Dynamic EXCEPT query
+			// Note: We use NULL as a placeholder for user_id in EXCEPT if it's not available in event_daily
+			// to keep column counts consistent across INTERSECT branches.
 			query := fmt.Sprintf(`
             SELECT DISTINCT nexora_id 
             FROM event_daily
@@ -529,8 +527,8 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
 
 			eventSelects = append(eventSelects, query)
 		} else {
-			// 3. Fallback to standard JOIN logic for positive matches
-			whereClause = "WHERE " + strings.Join(conditions, " AND ")
+			whereClause := "WHERE " + strings.Join(conditions, " AND ")
+			// We select nexora_id here.
 			eventSelects = append(eventSelects, fmt.Sprintf(
 				`SELECT DISTINCT ev.nexora_id
             FROM events ev
@@ -549,28 +547,31 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
     WITH
     %s,
     cp_filtered AS (
-        SELECT identity_key, nexora_id FROM cp_resolved
+        /* We pull external_user_id here so it's available for the final SELECT */
+        SELECT identity_key, nexora_id, external_user_id FROM cp_resolved
     ),
     event_users AS (
         %s
     )
-    SELECT cp.identity_key FROM event_users eu
+    /* Final Join: Link nexora_id from events to the full profile data */
+    SELECT cp.identity_key, cp.external_user_id, cp.nexora_id 
+    FROM event_users eu
     INNER JOIN cp_filtered cp ON eu.nexora_id = cp.nexora_id
 )`, cpResolutionCTEs(projectID, property), eventBlock)
 }
 
 func buildUserPropOnlyGroupSubquery(pg parsedGroup, projectID, property string) string {
-	fmt.Println(pg.havingClauses)
-	fmt.Println("((((((((conditions inside user prop only group sub query))))))))")
 	whereClause := ""
 	if len(pg.havingClauses) > 0 {
+		// Build the filter (e.g., WHERE country = 'US' AND version > 1)
 		whereClause = "WHERE " + strings.Join(pg.havingClauses, " "+strings.ToUpper(pg.upMatchMode)+" ")
 	}
 
 	return fmt.Sprintf(`(
     WITH
     %s
-    SELECT identity_key FROM cp_resolved
+    SELECT identity_key, external_user_id, nexora_id 
+    FROM cp_resolved
     %s
 )`, cpResolutionCTEs(projectID, property), whereClause)
 }
@@ -578,15 +579,12 @@ func buildUserPropOnlyGroupSubquery(pg parsedGroup, projectID, property string) 
 func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string {
 	eventSelects := []string{}
 	for _, conditions := range pg.eventFilterClauses {
-		var whereClause string
 		var currentEventName string
 		hasNegativeCondition := false
 
-		// 1. Check for the negative condition and extract the event name
 		for _, c := range conditions {
 			if strings.Contains(c, "!=") {
 				hasNegativeCondition = true
-				// Extract 'order_placed' from "ed.event_name != 'order_placed'"
 				parts := strings.Split(c, "!=")
 				if len(parts) > 1 {
 					currentEventName = strings.TrimSpace(parts[1])
@@ -596,7 +594,6 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
 		}
 
 		if hasNegativeCondition && currentEventName != "" {
-			// 2. Frame the Dynamic EXCEPT query
 			query := fmt.Sprintf(`
             SELECT DISTINCT nexora_id 
             FROM event_daily
@@ -606,11 +603,9 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
             FROM event_daily
             WHERE event_date < toDate('2026-04-29', 'UTC')
               AND event_name = %s`, currentEventName)
-
 			eventSelects = append(eventSelects, query)
 		} else {
-			// 3. Fallback to standard JOIN logic for positive matches
-			whereClause = "WHERE " + strings.Join(conditions, " AND ")
+			whereClause := "WHERE " + strings.Join(conditions, " AND ")
 			eventSelects = append(eventSelects, fmt.Sprintf(
 				`SELECT DISTINCT ev.nexora_id
             FROM events ev
@@ -634,13 +629,17 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
     WITH
     %s,
     cp_filtered AS (
+        /* Filters profiles based on User Properties first */
         SELECT * FROM cp_resolved
         %s
     ),
     event_users AS (
+        /* Filters users based on Event behavior */
         %s
     )
-    SELECT cp.identity_key FROM event_users eu
+    /* Final Join links behavioral data with filtered profile data */
+    SELECT cp.identity_key, cp.external_user_id, cp.nexora_id 
+    FROM event_users eu
     INNER JOIN cp_filtered cp ON eu.nexora_id = cp.nexora_id
 )`, cpResolutionCTEs(projectID, property), whereClause, eventBlock)
 }
