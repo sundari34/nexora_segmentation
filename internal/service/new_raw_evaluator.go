@@ -524,7 +524,7 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
 
 			joiner := "WHERE"
 			if contextWhere != "" {
-				joiner = ""
+				joiner = "AND"
 			}
 
 			// EXCEPT logic: [Users in this timeframe] MINUS [Users who did the event in this timeframe]
@@ -621,7 +621,7 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
 
 			joiner := "WHERE"
 			if contextWhere != "" {
-				joiner = ""
+				joiner = "AND"
 			}
 
 			// 2. Generate the query
