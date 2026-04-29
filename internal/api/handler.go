@@ -14,8 +14,8 @@ import (
 // Query (optional): ?segment_id=abc-123 (will override payload's SegmentID)
 func EvaluateHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	fmt.Println(r.Body)
-	fmt.Println("(((((((((((((((((((((r.Body)))))))))))))))))))))")
+	// fmt.Println(r.Body)
+	// fmt.Println("(((((((((((((((((((((r.Body)))))))))))))))))))))")
 	var req models.SegmentNewPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
@@ -33,7 +33,7 @@ func EvaluateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := mapedRes
-	fmt.Println(resp)
+	// fmt.Println(resp)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
 }
