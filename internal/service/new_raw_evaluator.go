@@ -498,6 +498,8 @@ func buildGroupSubquery(pg parsedGroup, projectID, property string) string {
 func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) string {
 	eventSelects := []string{}
 	for _, conditions := range pg.eventFilterClauses {
+		fmt.Println(conditions)
+		fmt.Println("((((((((conditions inside event only group sub query))))))))")
 		whereClause := "WHERE " + strings.Join(conditions, " AND ")
 		eventSelects = append(eventSelects, fmt.Sprintf(
 			`SELECT DISTINCT ev.nexora_id
@@ -527,6 +529,8 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
 }
 
 func buildUserPropOnlyGroupSubquery(pg parsedGroup, projectID, property string) string {
+	fmt.Println(pg.havingClauses)
+	fmt.Println("((((((((conditions inside user prop only group sub query))))))))")
 	whereClause := ""
 	if len(pg.havingClauses) > 0 {
 		whereClause = "WHERE " + strings.Join(pg.havingClauses, " "+strings.ToUpper(pg.upMatchMode)+" ")
@@ -543,6 +547,8 @@ func buildUserPropOnlyGroupSubquery(pg parsedGroup, projectID, property string) 
 func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string {
 	eventSelects := []string{}
 	for _, conditions := range pg.eventFilterClauses {
+		fmt.Println(conditions)
+		fmt.Println("((((((((conditions inside mixed group sub query))))))))")
 		whereClause := "WHERE " + strings.Join(conditions, " AND ")
 		eventSelects = append(eventSelects, fmt.Sprintf(
 			`SELECT DISTINCT ev.nexora_id
