@@ -522,6 +522,11 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
 				contextWhere = "WHERE " + strings.Join(otherConditions, " AND ")
 			}
 
+			joiner := "WHERE"
+			if contextWhere != "" {
+				joiner = ""
+			}
+
 			// EXCEPT logic: [Users in this timeframe] MINUS [Users who did the event in this timeframe]
 			query := fmt.Sprintf(`
             SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
@@ -532,15 +537,10 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
             SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
             FROM events ev
             INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
-            %s %s AND ed.event_name = %s`,
+            %s %s ed.event_name = %s`,
 				contextWhere,
 				contextWhere,
-				func() string {
-					if contextWhere == "" {
-						return "WHERE"
-					}
-					return "AND"
-				}(),
+				joiner,
 				currentEventName)
 
 			eventSelects = append(eventSelects, query)
