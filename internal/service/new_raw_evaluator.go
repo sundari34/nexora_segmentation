@@ -516,11 +516,11 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
 			// Note: We use NULL as a placeholder for user_id in EXCEPT if it's not available in event_daily
 			// to keep column counts consistent across INTERSECT branches.
 			query := fmt.Sprintf(`
-            SELECT DISTINCT nexora_id
+            SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
             FROM event_daily
             WHERE event_date < toDate('2026-04-29', 'UTC')
-            EXCEPT
-            SELECT nexora_id
+            EXCEPT DISTINCT
+            SELECT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
             FROM event_daily
             WHERE event_date < toDate('2026-04-29', 'UTC')
               AND event_name = %s`, currentEventName)
@@ -530,7 +530,7 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
 			whereClause := "WHERE " + strings.Join(conditions, " AND ")
 			// We select nexora_id here.
 			eventSelects = append(eventSelects, fmt.Sprintf(
-				`SELECT DISTINCT ev.nexora_id
+				`SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
             FROM events ev
             INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
             %s`, whereClause))
@@ -543,7 +543,7 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
 	}
 	eventBlock := strings.Join(eventSelects, "\n        "+setOp+"\n        ")
 
-	return fmt.Sprintf(`(
+	return fmt.Sprintf(`(s
     WITH
     %s,
     cp_filtered AS (
@@ -556,7 +556,7 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
     /* Final Join: Link nexora_id from events to the full profile data */
     SELECT cp.identity_key, cp.external_user_id, cp.nexora_id
     FROM event_users eu
-    INNER JOIN cp_filtered cp ON eu.nexora_id = cp.nexora_id
+    INNER JOIN cp_filtered cp ON eu.eu_identity_key = cp.identity_key
 )`, cpResolutionCTEs(projectID, property), eventBlock)
 }
 
@@ -595,7 +595,7 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
 
 		if hasNegativeCondition && currentEventName != "" {
 			query := fmt.Sprintf(`
-            SELECT DISTINCT nexora_id
+            SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
             FROM event_daily
             WHERE event_date < toDate('2026-04-29', 'UTC')
             EXCEPT
@@ -607,7 +607,7 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
 		} else {
 			whereClause := "WHERE " + strings.Join(conditions, " AND ")
 			eventSelects = append(eventSelects, fmt.Sprintf(
-				`SELECT DISTINCT ev.nexora_id
+				`SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
             FROM events ev
             INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
             %s`, whereClause))
@@ -640,7 +640,7 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
     /* Final Join links behavioral data with filtered profile data */
     SELECT cp.identity_key, cp.external_user_id, cp.nexora_id
     FROM event_users eu
-    INNER JOIN cp_filtered cp ON eu.nexora_id = cp.nexora_id
+    INNER JOIN cp_filtered cp ON eu.eu_identity_key = cp.identity_key
 )`, cpResolutionCTEs(projectID, property), whereClause, eventBlock)
 }
 
