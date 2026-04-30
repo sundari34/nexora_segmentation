@@ -50,11 +50,19 @@ func getTimeConditionsTyped(tc *models.TimeCondition) string {
 	var err error
 	switch v := tc.Value.(type) {
 	case string:
-		days, err = daysFromNow(v)
-		fmt.Println(days)
-		fmt.Println("(((((days))))) ")
+		if op == "last_n_days" || op == "next_n_days" {
+			days, err = strconv.Atoi(v)
+			fmt.Println(days)
+			fmt.Println("(((((days string last_n_days next_n_days))))) ")
+		} else {
+			days, err = daysFromNow(v)
+			fmt.Println(days)
+			fmt.Println("(((((days string on before after between))))) ")
+		}
 	case float64:
 		days = int(v)
+		fmt.Println(days)
+		fmt.Println("(((((days float64))))) ")
 	}
 	if err != nil && op != "between" {
 		fmt.Println(err)
