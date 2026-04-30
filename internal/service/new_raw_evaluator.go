@@ -524,6 +524,8 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
 
 			whereClause := "WHERE " + strings.Join(conditions, " AND ")
 			updatedWhereClause := strings.Replace(whereClause, "ed.event_name !=", "ed.event_name =", 1)
+			fmt.Println(updatedWhereClause)
+			fmt.Println("(((((updatedWhereClause)))))")
 			// EXCEPT logic: [Users in this timeframe] MINUS [Users who did the event in this timeframe]
 			query := fmt.Sprintf(`
             SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
@@ -616,6 +618,8 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
 
 			whereClause := "WHERE " + strings.Join(conditions, " AND ")
 			updatedWhereClause := strings.Replace(whereClause, "ed.event_name !=", "ed.event_name =", 1)
+			fmt.Println(updatedWhereClause)
+			fmt.Println("(((((updatedWhereClause)))))")
 			// 2. Generate the query
 			query := fmt.Sprintf(`
     SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
