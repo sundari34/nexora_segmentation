@@ -497,6 +497,8 @@ func buildGroupSubquery(pg parsedGroup, projectID, property string) string {
 
 func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) string {
 	eventSelects := []string{}
+	fmt.Println(pg.eventFilterClauses)
+	fmt.Println("(((((pg.eventFilterClauses)))))")
 	for _, conditions := range pg.eventFilterClauses {
 		var currentEventName string
 		var otherConditions []string
@@ -593,6 +595,8 @@ func buildUserPropOnlyGroupSubquery(pg parsedGroup, projectID, property string) 
 
 func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string {
 	eventSelects := []string{}
+	fmt.Println(pg.eventFilterClauses)
+	fmt.Println("(((((pg.eventFilterClauses)))))")
 	for _, conditions := range pg.eventFilterClauses {
 		var currentEventName string
 		var otherConditions []string
