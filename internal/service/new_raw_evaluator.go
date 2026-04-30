@@ -522,11 +522,7 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
 				contextWhere = "WHERE " + strings.Join(otherConditions, " AND ")
 			}
 
-			joiner := "WHERE"
-			if contextWhere != "" {
-				joiner = "AND"
-			}
-
+			whereClause := "WHERE " + strings.Join(conditions, " AND ")
 			// EXCEPT logic: [Users in this timeframe] MINUS [Users who did the event in this timeframe]
 			query := fmt.Sprintf(`
             SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
@@ -537,11 +533,9 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
             SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
             FROM events ev
             INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
-            %s %s ed.event_name = %s`,
+            %s`,
 				contextWhere,
-				contextWhere,
-				joiner,
-				currentEventName)
+				whereClause)
 
 			eventSelects = append(eventSelects, query)
 		} else {
@@ -619,11 +613,7 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
 				contextWhere = "WHERE " + strings.Join(otherConditions, " AND ")
 			}
 
-			joiner := "WHERE"
-			if contextWhere != "" {
-				joiner = "AND"
-			}
-
+			whereClause := "WHERE " + strings.Join(conditions, " AND ")
 			// 2. Generate the query
 			query := fmt.Sprintf(`
     SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
@@ -634,11 +624,9 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
     SELECT DISTINCT multiIf(ev.user_id != 'none' AND ev.user_id != '', ev.user_id, ev.nexora_id) AS eu_identity_key
     FROM events ev
     INNER JOIN event_daily ed ON ev.event_name = ed.event_name AND ev.nexora_id = ed.nexora_id
-    %s %s ed.event_name = %s`,
+    %s`,
 				contextWhere, // The first block context (e.g., "WHERE ed.event_date...")
-				contextWhere, // The second block context
-				joiner,       // Dynamically "WHERE" or "AND"
-				currentEventName)
+				whereClause)
 
 			eventSelects = append(eventSelects, query)
 		} else {
