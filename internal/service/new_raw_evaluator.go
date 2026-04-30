@@ -35,21 +35,30 @@ func daysFromNow(dateStr string) (int, error) {
 }
 
 func getTimeConditionsTyped(tc *models.TimeCondition) string {
+	fmt.Println(tc)
+	fmt.Println("(((((tc))))) ")
 	if tc == nil {
 		return ""
 	}
 	op := strings.ToLower(tc.Operator)
+	fmt.Println(op)
+	fmt.Println("(((((op))))) ")
 	now := time.Now().UTC()
-
+	fmt.Println(now)
+	fmt.Println("(((((now))))) ")
 	var days int
 	var err error
 	switch v := tc.Value.(type) {
 	case string:
 		days, err = daysFromNow(v)
+		fmt.Println(days)
+		fmt.Println("(((((days))))) ")
 	case float64:
 		days = int(v)
 	}
 	if err != nil && op != "between" {
+		fmt.Println(err)
+		fmt.Println("(((((err))))) ")
 		return ""
 	}
 
@@ -57,6 +66,8 @@ func getTimeConditionsTyped(tc *models.TimeCondition) string {
 	case "last_n_days":
 		// from N days ago up to now
 		from := now.AddDate(0, 0, -days)
+		fmt.Println(from)
+		fmt.Println("(((((from))))) ")
 		return fmt.Sprintf(
 			"ed.event_date >= toDate('%s', 'UTC') AND ed.event_date <= toDate('%s', 'UTC')",
 			from.UTC().Format("2006-01-02"),
@@ -66,6 +77,8 @@ func getTimeConditionsTyped(tc *models.TimeCondition) string {
 	case "next_n_days":
 		// from now up to N days ahead
 		to := now.AddDate(0, 0, days)
+		fmt.Println(to)
+		fmt.Println("(((((to))))) ")
 		return fmt.Sprintf(
 			"ed.event_date >= toDate('%s', 'UTC') AND ed.event_date <= toDate('%s', 'UTC')",
 			now.UTC().Format("2006-01-02"),
@@ -78,6 +91,8 @@ func getTimeConditionsTyped(tc *models.TimeCondition) string {
 		if err != nil {
 			return ""
 		}
+		fmt.Println(d)
+		fmt.Println("(((((d))))) ")
 		return fmt.Sprintf(
 			"ed.event_date = toDate('%s', 'UTC')",
 			d.UTC().Format("2006-01-02"),
@@ -88,6 +103,8 @@ func getTimeConditionsTyped(tc *models.TimeCondition) string {
 		if err != nil {
 			return ""
 		}
+		fmt.Println(d)
+		fmt.Println("(((((d))))) ")
 		return fmt.Sprintf(
 			"ed.event_date < toDate('%s', 'UTC')",
 			d.UTC().Format("2006-01-02"),
@@ -98,6 +115,8 @@ func getTimeConditionsTyped(tc *models.TimeCondition) string {
 		if err != nil {
 			return ""
 		}
+		fmt.Println(d)
+		fmt.Println("(((((d))))) ")
 		return fmt.Sprintf(
 			"ed.event_date > toDate('%s', 'UTC')",
 			d.UTC().Format("2006-01-02"),
@@ -109,6 +128,10 @@ func getTimeConditionsTyped(tc *models.TimeCondition) string {
 		if err1 != nil || err2 != nil {
 			return ""
 		}
+		fmt.Println(start)
+		fmt.Println("(((((start))))) ")
+		fmt.Println(end)
+		fmt.Println("(((((end))))) ")
 		return fmt.Sprintf(
 			"ed.event_date >= toDate('%s', 'UTC') AND ed.event_date <= toDate('%s', 'UTC')",
 			start.UTC().Format("2006-01-02"),
@@ -794,8 +817,6 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		upFiltersMatchMode := strings.ToUpper(group.MatchMode)
 
 		for _, filter := range group.Filters {
-			fmt.Println(filter)
-			fmt.Println("(((((filter))))) ")
 			switch filter.FilterCategory {
 
 			case "event":
