@@ -523,6 +523,8 @@ func buildEventOnlyGroupSubquery(pg parsedGroup, projectID, property string) str
 			}
 
 			whereClause := "WHERE " + strings.Join(conditions, " AND ")
+			fmt.Println(whereClause)
+			fmt.Println("(((((whereClause)))))")
 			updatedWhereClause := strings.Replace(whereClause, "ed.event_name !=", "ed.event_name =", 1)
 			fmt.Println(updatedWhereClause)
 			fmt.Println("(((((updatedWhereClause)))))")
@@ -617,6 +619,9 @@ func buildMixedGroupSubquery(pg parsedGroup, projectID, property string) string 
 			}
 
 			whereClause := "WHERE " + strings.Join(conditions, " AND ")
+			fmt.Println(whereClause)
+			fmt.Println("(((((whereClause)))))")
+
 			updatedWhereClause := strings.Replace(whereClause, "ed.event_name !=", "ed.event_name =", 1)
 			fmt.Println(updatedWhereClause)
 			fmt.Println("(((((updatedWhereClause)))))")
