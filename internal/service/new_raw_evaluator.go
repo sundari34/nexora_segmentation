@@ -794,6 +794,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 		upFiltersMatchMode := strings.ToUpper(group.MatchMode)
 
 		for _, filter := range group.Filters {
+			fmt.Println(filter)
+			fmt.Println("(((((filter))))) ")
 			switch filter.FilterCategory {
 
 			case "event":
@@ -819,7 +821,11 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 				}
 
 				if ec.Time != nil {
+					fmt.Println(ec.Time)
+					fmt.Println("(((((ec.Time))))) ")
 					if tc := getTimeConditionsTyped(ec.Time); tc != "" {
+						fmt.Println(tc)
+						fmt.Println("(((((tc))))) ")
 						singleEventConditions = append(singleEventConditions, tc)
 					}
 				}
@@ -837,7 +843,8 @@ func EvaluteRaw(req models.SegmentNewPayload) (map[string]interface{}, error) {
 					singleEventConditions = append(singleEventConditions,
 						fmt.Sprintf("ed.event_name != '%s'", ec.EventName))
 				}
-
+				fmt.Println(singleEventConditions)
+				fmt.Println("(((((singleEventConditions))))) ")
 				pg.eventFilterClauses = append(pg.eventFilterClauses, singleEventConditions)
 				pg.eventMatchMode = eventFiltersMatchMode
 
