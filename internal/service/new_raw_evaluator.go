@@ -463,7 +463,7 @@ func cpResolutionCTEs(projectID, property string) string {
     SELECT
         nexora_id,
         multiIf(
-            argMaxMerge(external_user_id_state) != 'none',
+            argMaxMerge(external_user_id_state) != 'none' AND argMaxMerge(external_user_id_state) != '',
             argMaxMerge(external_user_id_state),
             nexora_id
         )                                                           AS identity_key,
