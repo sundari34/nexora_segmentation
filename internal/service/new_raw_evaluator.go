@@ -355,6 +355,62 @@ func handleTypedRule(r models.Rule, where *[]string, having *[]string, scope *st
 	}
 }
 
+func normalizeOperator(op string) string {
+	normalized := strings.ToLower(strings.ReplaceAll(op, " ", ""))
+
+	verboseMap := map[string]string{
+		// Equality
+		"equal":            "eq",
+		"equalto":          "eq",
+		"equals":           "eq",
+		"equalsto":         "eq",
+		"notequal":         "neq",
+		"notequalto":       "neq",
+		"notequals":        "neq",
+		"notequalsto":      "neq",
+
+		// Comparison
+		"greaterthan":          "gt",
+		"lessthan":             "lt",
+		"greaterthanorequal":   "gte",
+		"greaterthanorequalto": "gte",
+		"lessthanorequal":      "lte",
+		"lessthanorequalto":    "lte",
+
+		// Containment
+		"contains":        "contains",
+		"doesnotcontain":  "doesnotcontain",
+		"notcontains":     "doesnotcontain",
+		"doesnotinclude":  "doesnotcontain",
+
+		// Membership
+		"isin":          "in",
+		"isnotin":       "notin",
+		"notincludedin": "notin",
+
+		// Null checks
+		"isnull":     "null",
+		"isnotnull":  "notnull",
+		"isempty":    "null",
+		"isnotempty": "notnull",
+
+		// Begins / ends with
+		"beginswith":        "beginswith",
+		"startswith":        "beginswith",
+		"doesnotbeginwith":  "doesnotbeginwith",
+		"doesnotstartswith": "doesnotbeginwith",
+		"endswith":          "endswith",
+		"doesnotendwith":    "doesnotendwith",
+	}
+
+	if canonical, ok := verboseMap[normalized]; ok {
+		return canonical
+	}
+
+	// Nothing matched — default to equality
+	return "eq"
+}
+
 func getCHEquivalentOperator(op string) string {
 	switch strings.ToLower(op) {
 	case "=", "eq":
@@ -384,7 +440,11 @@ func getCHEquivalentOperator(op string) string {
 	case "beginswith", "doesnotendwith", "endswith", "doesnotbeginwith":
 		return "like"
 	default:
-		return strings.ToLower(op)
+		normalized := normalizeOperator(op)
+		if normalized != strings.ToLower(op) {
+			return getCHEquivalentOperator(normalized)
+		}
+		return "="
 	}
 }
 
