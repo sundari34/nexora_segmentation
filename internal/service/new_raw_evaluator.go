@@ -360,54 +360,54 @@ func normalizeOperator(op string) string {
 
 	verboseMap := map[string]string{
 		// Equality
-		"equal":            "eq",
-		"equalto":          "eq",
-		"equals":           "eq",
-		"equalsto":         "eq",
-		"notequal":         "neq",
-		"notequalto":       "neq",
-		"notequals":        "neq",
-		"notequalsto":      "neq",
+		"equal":       "eq",
+		"equalto":     "eq",
+		"equals":      "eq",
+		"equalsto":    "eq",
+		"notequal":    "neq",
+		"notequalto":  "neq",
+		"notequals":   "neq",
+		"notequalsto": "neq",
 
 		// Comparison
-		"greaterthan":          "gt",
-		"lessthan":             "lt",
-		"greaterthanorequal":   "gte",
+		"greaterthan":          "gt",
+		"lessthan":             "lt",
+		"greaterthanorequal":   "gte",
 		"greaterthanorequalto": "gte",
-		"lessthanorequal":      "lte",
-		"lessthanorequalto":    "lte",
+		"lessthanorequal":      "lte",
+		"lessthanorequalto":    "lte",
 
 		// Containment
-		"contains":        "contains",
-		"doesnotcontain":  "doesnotcontain",
-		"notcontains":     "doesnotcontain",
-		"doesnotinclude":  "doesnotcontain",
+		"contains":       "contains",
+		"doesnotcontain": "doesnotcontain",
+		"notcontains":    "doesnotcontain",
+		"doesnotinclude": "doesnotcontain",
 
 		// Membership
-		"isin":          "in",
-		"isnotin":       "notin",
+		"isin":          "in",
+		"isnotin":       "notin",
 		"notincludedin": "notin",
 
 		// Null checks
-		"isnull":     "null",
-		"isnotnull":  "notnull",
-		"isempty":    "null",
+		"isnull":     "null",
+		"isnotnull":  "notnull",
+		"isempty":    "null",
 		"isnotempty": "notnull",
 
 		// Begins / ends with
-		"beginswith":        "beginswith",
-		"startswith":        "beginswith",
-		"doesnotbeginwith":  "doesnotbeginwith",
+		"beginswith":        "beginswith",
+		"startswith":        "beginswith",
+		"doesnotbeginwith":  "doesnotbeginwith",
 		"doesnotstartswith": "doesnotbeginwith",
-		"endswith":          "endswith",
-		"doesnotendwith":    "doesnotendwith",
+		"endswith":          "endswith",
+		"doesnotendwith":    "doesnotendwith",
 	}
 
 	if canonical, ok := verboseMap[normalized]; ok {
 		return canonical
 	}
 
-	// Nothing matched — default to equality
+	// Nothing matched - default to equality
 	return "eq"
 }
 
