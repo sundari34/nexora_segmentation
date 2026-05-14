@@ -1,21 +1,27 @@
 name: SonarQube Analysis
+
 on:
   push:
     branches:
-      - main
+      - main  # Ensure your branch name is 'main'
+
 jobs:
   sonarqube:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Execute SonarQube Scanner
-        shell: cmd
-        run: |
-          "C:\Users\sundari\Downloads\sonar-scanner-8.0.1.6346-windows-x64\bin\sonar-scanner.bat" ^
-            -Dsonar.projectKey=Nexora_segmentation ^
-            -Dsonar.sources=. ^
-            -Dsonar.host.url=http://192.168.1.103:9001 ^
-            -Dsonar.login=64de6a2af8d09614cf5db64ffe1edeb7ae553cd2
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=Nexora_segmentation
+            -Dsonar.sources=.
+            -Dsonar.go.exclusions=**/vendor/**
+            -Dsonar.scanner.skipversioncheck=true
