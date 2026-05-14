@@ -1,0 +1,30 @@
+name: SonarQube Analysis Automation
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  sonarqube:
+    name: SonarQube Scan
+    runs-on: self-hosted  
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
+
+      - name: Execute SonarQube Scanner
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: "http://192.168.1.103:9001"
+        shell: cmd
+        run: |
+          sonar-scanner ^
+            -Dsonar.projectKey=Nexora_segmentation ^
+            -Dsonar.sources=. ^
+            -Dsonar.host.url=%SONAR_HOST_URL% ^
+            -Dsonar.login=%SONAR_TOKEN%
