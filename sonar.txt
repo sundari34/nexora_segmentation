@@ -1,0 +1,3 @@
+sonar.projectKey=sundari34_nexora_segmentation
+sonar.organization=sundari34
+sonar.sources=.
