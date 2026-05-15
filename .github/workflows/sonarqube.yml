@@ -1,27 +1,17 @@
-name: SonarQube Analysis
-
+name: SonarQube Scan
 on:
   push:
     branches:
-      - main  # Ensure your branch name is 'main'
-
+      - main
 jobs:
   sonarqube:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@master
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        with:
-          args: >
-            -Dsonar.projectKey=Nexora_segmentation
-            -Dsonar.sources=.
-            -Dsonar.go.exclusions=**/vendor/**
-            -Dsonar.scanner.skipversioncheck=true
