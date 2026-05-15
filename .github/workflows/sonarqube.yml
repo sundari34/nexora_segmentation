@@ -5,18 +5,16 @@ on:
     branches:
       - main
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   sonarcloud:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v6
